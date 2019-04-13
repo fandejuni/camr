@@ -45,7 +45,7 @@ lemma sapply_cong:
   using assms
   apply (induction t)
    apply auto
-  apply (metis (no_types, hide_lams) Sup_set_fold UnI1 Union_insert insert_absorb list.map(2) list.set(2) set_map)
+  apply (metis Sup_set_fold UnI1 Union_insert insert_absorb list.map(2) list.set(2) set_map)
   done
 
 (*
@@ -108,5 +108,61 @@ qed
 
 lemma Var_scomp [simp]: "Var \<circ>s \<sigma> = \<sigma>"
   by (simp add: Var_id)
+
+(* 1. (d) *)
+
+fun sdom :: "('f , 'v) subst \<Rightarrow> 'v set"
+  where
+  "sdom \<sigma> = {x. \<sigma> x \<noteq> Var x}"
+
+thm sorted_list_of_set
+
+definition set_to_list :: "'a set \<Rightarrow> 'a list"
+  where "set_to_list s = (SOME l. set l = s)"
+
+lemma  set_set_to_list:
+   "finite s \<Longrightarrow> set (set_to_list s) = s"
+unfolding set_to_list_def by (metis (mono_tags) finite_list some_eq_ex)
+
+fun sran :: "('f, 'v) subst \<Rightarrow> ('f, 'v) term set"
+  where
+"sran \<sigma> = (\<Union>x\<in>sdom \<sigma>. {\<sigma> x})"
+
+fun svran:: "('f , 'v) subst \<Rightarrow> 'v set"
+  where
+"svran \<sigma> = (\<Union>t\<in>(sran \<sigma>).(fv t))"
+
+lemma sdom_Var [simp]: "sdom Var = {}"
+  by simp
+
+lemma svran_Var [simp]: "svran Var = {}"
+  by simp
+
+lemma sdom_single_non_trivial [simp]:
+  assumes "t \<noteq> Var x"
+  shows "sdom (Var(x:=t)) = {x}"
+  using assms by simp
+
+lemma svran_single_non_trivial [simp]:
+  assumes "t \<noteq> Var x"
+  shows "svran (Var(x:=t)) = fv t"
+  using assms by simp
+
+lemma fv_sapply_sdom_svran:
+  assumes "x \<in> fv (\<sigma> · t)"
+  shows "x \<in> (fv t - sdom \<sigma>) \<union> svran \<sigma>"
+  using assms
+  apply (induction t)
+   apply auto
+     apply force
+    apply (metis empty_iff fv.simps(1) insert_iff)
+  sorry
+
+lemma sdom_scomp: "sdom (\<sigma> \<circ>s \<tau> ) \<subseteq> sdom \<sigma> \<union> sdom \<tau>"
+  by auto
+
+lemma svran_scomp: "svran (\<sigma> \<circ>s \<tau> ) \<subseteq> svran \<sigma> \<union> svran \<tau>"
+  apply (auto simp add: sdom_scomp)
+  sorry
 
 end
