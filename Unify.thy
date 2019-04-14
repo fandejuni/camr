@@ -8,7 +8,7 @@ Assignment 1
 --------------------------------------------------
 *)
 
-datatype ('f , 'v) "term" = Var 'v | Fun 'f "('f, 'v) term list "
+datatype ('f , 'v) "term" = Var 'v | Fun 'f "('f, 'v) term list"
 
 fun fv :: "('f , 'v) term \<Rightarrow> 'v set" where
   "fv (Var x) = {x}"
@@ -192,19 +192,19 @@ Assignment 2
 *)
 
 type_synonym ('f, 'v) equation = "('f, 'v) term \<times> ('f, 'v) term"
-type_synonym ('f, 'v) eq_system = "('f, 'v) equation list"
+type_synonym ('f, 'v) equations = "('f, 'v) equation list"
 
 fun fv_eq :: "('f , 'v) equation \<Rightarrow> 'v set" where
   "fv_eq eq = (fv (fst eq)) \<union> (fv (snd eq))"
 
-fun fv_eq_system :: "('f, 'v) eq_system \<Rightarrow> 'v set" where
+fun fv_eq_system :: "('f, 'v) equations \<Rightarrow> 'v set" where
   "fv_eq_system l = fold (\<union>) (map fv_eq l) {}"
 
 fun sapply_eq :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equation \<Rightarrow> ('f, 'v) equation" (infixr "·" 67)
   where
   "sapply_eq \<sigma> eq = (sapply \<sigma> (fst eq), sapply \<sigma> (snd eq))"
 
-fun sapply_eq_system :: "('f, 'v) subst \<Rightarrow> ('f, 'v) eq_system \<Rightarrow> ('f, 'v) eq_system" (infixr "·" 67)
+fun sapply_eq_system :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equations \<Rightarrow> ('f, 'v) equations" (infixr "·" 67)
   where
 "sapply_eq_system \<sigma> l = map (sapply_eq \<sigma>) l"
 
@@ -243,5 +243,72 @@ lemma sapply_scomp_distrib_eq_system[simp]: "(\<sigma> \<circ>s \<tau>) · (s ::
   apply auto
   using sapply_scomp_distrib apply force+
   done
+
+(* 2. (b) *)
+
+inductive unifies :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equation \<Rightarrow> bool" where
+  unifies_eq: "(\<sigma> · u = \<sigma> · t) \<Longrightarrow> unifies \<sigma> (u, t)"
+
+inductive unifiess :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equations \<Rightarrow> bool" where
+  unifiess_empty: "unifiess \<sigma> []"
+| unifiess_rec:   "(unifiess \<sigma> s) \<and> (unifies \<sigma> eq) \<Longrightarrow> unifiess \<sigma> (eq # s)"
+
+fun is_mgu :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equations \<Rightarrow> bool" where
+  "is_mgu \<sigma> U = (\<forall>\<tau>. unifiess \<tau> U \<longrightarrow> (\<exists>\<rho> . \<tau> = \<rho> \<circ>s \<sigma>))"
+
+(* 2. (c) *)
+
+lemma unifies_sapply_eq[simp]: "unifies \<sigma> (sapply_eq \<tau> eq) \<longleftrightarrow> unifies (\<sigma> \<circ>s \<tau> ) eq"
+proof -
+  have "unifies \<sigma> (sapply_eq \<tau> eq) \<longleftrightarrow> \<sigma> · (fst (sapply_eq \<tau> eq)) = \<sigma> · (snd (sapply_eq \<tau> eq))"
+    by (simp add: unifies.simps)
+  also have "... \<longleftrightarrow> \<sigma> · (\<tau>  · (fst eq)) = \<sigma> · (\<tau>  · (snd eq))" by simp
+  also have "... \<longleftrightarrow> (\<sigma> \<circ>s \<tau>)  · (fst eq) = (\<sigma> \<circ>s \<tau>)  · (snd eq)" by (metis sapply_scomp_distrib)
+  also have "... \<longleftrightarrow> unifies (\<sigma> \<circ>s \<tau> ) eq" using unifies.simps by force
+  then show ?thesis using calculation by blast
+qed
+
+lemma unifies_sapply_eq_sys: "unifiess \<sigma> (sapply_eq_system \<tau> U) \<longleftrightarrow> unifiess (\<sigma> \<circ>s \<tau> ) U"
+  apply (induction U)
+   apply (simp add: unifiess_empty)
+  apply auto
+     apply (metis (no_types, lifting) list.discI list.sel(1) prod.sel(1) prod.sel(2) sapply_cong sapply_scomp_distrib scomp.simps unifies.simps unifiess.simps)
+    apply (metis (no_types, lifting) list.discI list.sel(1) prod.sel(1) prod.sel(2) sapply_cong sapply_scomp_distrib scomp.simps unifies.simps unifiess.simps)
+  using unifiess.cases apply auto[1]
+  using le_boolD ord_eq_le_trans unifiess.simps by blast
+
+(*
+--------------------------------------------------
+Assignment 3
+--------------------------------------------------
+*)
+
+fun lifted_comp :: "('f, 'v) subst option \<Rightarrow> ('f, 'v) subst \<Rightarrow> ('f, 'v) subst option"
+  where
+  "lifted_comp None \<tau> = None"
+| "lifted_comp (Some \<sigma>) \<tau> = Some (\<sigma> \<circ>s \<tau>)"
+
+fun get_equations :: "('f, 'v) term list \<Rightarrow> ('f, 'v) term list \<Rightarrow> ('f, 'v) equations"
+  where
+  "get_equations [] v = []"
+| "get_equations u [] = []"
+| "get_equations (h1 # q1) (h2 # q2) = (h1, h2) # (get_equations q1 q2)"
+
+fun unify :: "('f, 'v) equations \<Rightarrow> ('f, 'v) subst option"
+  where
+  "unify [] = Some Var"
+| "unify ((Var x, t) # U) = (
+  if (x \<notin> fv t) then
+    lifted_comp (unify((Var(x := t)) · U)) (Var(x := t))
+   else (
+     if Var x = t then unify(U) else None
+    )
+  )"
+| "unify ((u, Var y) # U) = unify ((Var y, u) # U)"
+| "unify ((Fun f u, Fun g v) # U) =
+  (if (f = g \<and> length u = length v) then
+    unify(append (get_equations u v) U)
+  else
+    None)"
 
 end
