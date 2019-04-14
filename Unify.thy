@@ -70,7 +70,7 @@ proof (induction t)
       then show "\<sigma> · Var x = \<tau> · Var x" by simp
 next
   case (Fun f l)
-  then show ?thesis sorry
+  then show ?thesis ? ? ?
 qed
 *)
 
@@ -143,10 +143,13 @@ lemma svran_single_non_trivial [simp]:
   shows "svran (Var(x:=t)) = fv t"
   using assms by simp
 
-lemma fold_union_map[simp]:
-  assumes "x \<in> (fold (\<union>) (map f l) {})"
-  shows "x \<in> (\<Union>y\<in>(set l).f y)"
-  using assms by (metis Sup_set_fold set_map)
+lemma fold_union_map[intro]:
+  "\<lbrakk> x \<in> (fold (\<union>) (map f l) {}) \<rbrakk> \<Longrightarrow> x \<in> (\<Union>y\<in>(set l).f y)"
+  by (metis Sup_set_fold set_map)
+
+lemma fold_union_map_rev[elim]:
+  "\<lbrakk> x \<in> (\<Union>y\<in>(set l).f y) \<rbrakk> \<Longrightarrow>  x \<in> (fold (\<union>) (map f l) {})"
+  by (metis Sup_set_fold set_map)
 
 lemma fv_fun[simp]: "fv (Fun f l) = (\<Union> x \<in> (set l). fv x)"
   by (metis Sup_set_fold fv.simps(2) set_map)
@@ -225,7 +228,7 @@ next
   have "... = (\<Union> x \<in> (fv_eq_system s). fv (\<sigma> x))" using Cons.IH by blast
   have "(\<Union>y\<in>(set (\<sigma> · [eq])). fv_eq y) =  (\<Union>x\<in>(fv_eq_system [eq]). fv (\<sigma> x))"
     by auto
-  also have "fv_eq_system (\<sigma> · (eq # s)) =
+  have "fv_eq_system (\<sigma> · (eq # s)) =
              (\<Union> x \<in> (fv_eq_system s). fv (\<sigma> x)) \<union> (\<Union>x\<in>(fv_eq_system [eq]). fv (\<sigma> x))"
     using Cons.IH \<open>(\<Union>y\<in>set (\<sigma> · s). fv_eq y) = fv_eq_system (\<sigma> · s)\<close> calculation by auto
   also have "... = (\<Union> x \<in> (fv_eq_system (eq # s)). fv (\<sigma> x))"
@@ -239,7 +242,7 @@ lemma sapply_scomp_distrib_eq[simp]: "(\<sigma> \<circ>s \<tau>) · (eq :: ('f, 
   using sapply_scomp_distrib apply force+
   done
 
-lemma sapply_scomp_distrib_eq_system[simp]: "(\<sigma> \<circ>s \<tau>) · (s :: ('f, 'v) eq_system) = \<sigma> · (\<tau> · s)"
+lemma sapply_scomp_distrib_eq_system[simp]: "(\<sigma> \<circ>s \<tau>) · (s :: ('f, 'v) equations) = \<sigma> · (\<tau> · s)"
   apply auto
   using sapply_scomp_distrib apply force+
   done
@@ -294,7 +297,103 @@ fun get_equations :: "('f, 'v) term list \<Rightarrow> ('f, 'v) term list \<Righ
 | "get_equations u [] = []"
 | "get_equations (h1 # q1) (h2 # q2) = (h1, h2) # (get_equations q1 q2)"
 
-fun unify :: "('f, 'v) equations \<Rightarrow> ('f, 'v) subst option"
+fun size_term :: "('f, 'v) term \<Rightarrow> nat" where
+  "size_term (Var x) = 0"
+| "size_term (Fun f l) = fold (+) (map size_term l) 1"
+
+lemma size_term_sound: "size_term (Fun f l) > fold (+) (map size_term l) 0"
+  by (simp add: fold_plus_sum_list_rev)
+
+lemma [simp]: "0 < size_term t \<or> size_term t = 0"
+  by auto
+
+fun k2 :: "('f, 'v) equations \<Rightarrow> nat" where
+  "k2 [] = 0"
+| "k2 (eq # U) = size_term (fst eq) + k2 U"
+
+lemma k2_def: "k2 U = fold (+) (map (size_term \<circ> fst) U) 0"
+  apply (induction U)
+   apply simp
+  by (simp add: fold_plus_sum_list_rev)
+
+lemma fold_union_basic: "fold (\<union>) l s = (fold (\<union>) l {}) \<union> s"
+proof -
+  have "fold (\<union>) l s = (\<Union>x\<in>(set l).x) \<union> s"
+    by (metis Sup_insert Sup_set_fold fold_simps(2) image_ident list.simps(15) sup_bot.right_neutral sup_commute)
+  also have "... = (fold (\<union>) l {}) \<union> s" by (simp add: Sup_set_fold)
+  then show ?thesis by (simp add: calculation)
+qed
+
+lemma measure_unify:
+  assumes "x \<notin> fv t"
+  shows "card (fold (\<union>) (map (fv_eq \<circ> (·) (Var(x := t))) U) {})
+       < card (fold (\<union>) (map fv_eq U) (insert x (fv t)))"
+  using assms
+proof -
+  have "card (fold (\<union>) (map (fv_eq \<circ> (·) (Var(x := t))) U) {})
+        = card (\<Union>y\<in>(set U).(fv_eq \<circ> (·) (Var(x := t))) y)"
+    by (metis Sup_set_fold set_map)
+  then show ?thesis sorry
+qed
+
+lemma measure_simp:
+  assumes "x \<in> fv t" and "Var x = t"
+  shows "card (fold (\<union>) (map fv_eq U) {}) < card (fold (\<union>) (map fv_eq U) (fv t)) \<or>
+           card (fold (\<union>) (map fv_eq U) {}) = card (fold (\<union>) (map fv_eq U) (fv t))"
+  using assms
+  by (metis card.insert card_eq_0_iff card_mono empty_iff finite_Un fold_union_basic fv.simps(1) le_neq_trans nat.simps(3) sup_ge1)
+
+lemma zip_fst:
+  assumes "length u = length v"
+  shows "(\<Union>x\<in>(set (zip u v)). (fv (fst x))) =  (\<Union>x\<in>(set u). (fv x))"
+proof -
+  have "(\<Union>x\<in>(set (zip u v)). (fv (fst x))) = fold (\<union>) (map (fv \<circ> fst) (zip u v)) {}"
+    by (metis (mono_tags, lifting) Sup.SUP_cong Sup_set_fold comp_apply set_map)
+  also have "... = fold (\<union>) (map fv (map fst (zip u v))) {}" by simp
+  also have "... = fold (\<union>) (map fv u) {}" by (simp add: assms)
+  then show ?thesis by (metis Sup_set_fold calculation set_map)
+qed
+
+lemma zip_snd:
+  assumes "length u = length v"
+  shows "(\<Union>x\<in>(set (zip u v)). (fv (snd x))) =  (\<Union>x\<in>(set v). (fv x))"
+proof -
+  have "(\<Union>x\<in>(set (zip u v)). (fv (snd x))) = fold (\<union>) (map (fv \<circ> snd) (zip u v)) {}"
+    by (metis (mono_tags, lifting) Sup.SUP_cong Sup_set_fold comp_apply set_map)
+  also have "... = fold (\<union>) (map fv (map snd (zip u v))) {}" by simp
+  also have "... = fold (\<union>) (map fv v) {}" by (simp add: assms)
+  then show ?thesis by (metis Sup_set_fold calculation set_map)
+qed
+
+lemma measure_fun:
+  assumes "f = g" and "length u = length v"
+  shows "card (fold (\<union>) (map fv_eq U) (fold (\<union>) (map fv_eq (zip u v)) {}))
+       = card (fold (\<union>) (map fv_eq U) (fold (\<union>) (map fv u) {} \<union> fold (\<union>) (map fv v) {})) \<and>
+       k2 (zip u v @ U) < fold (+) (map Unify.size_term u) (Suc 0) + k2 U"
+  using assms
+proof -
+  have "fold (\<union>) (map fv_eq (zip u v)) {} = (\<Union>x\<in>(set (zip u v)). (fv_eq x))"
+    by (metis Sup_set_fold set_map)
+  also have "... = (\<Union>x\<in>(set (zip u v)). (fv (fst x) \<union> fv (snd x)))" by auto
+  also have "... = (\<Union>x\<in>(set (zip u v)). (fv (fst x))) \<union>
+                   (\<Union>x\<in>(set (zip u v)). (fv (snd x)))" by blast
+  also have "... = (\<Union>x\<in>(set u). (fv x)) \<union> (\<Union>x\<in>(set v). (fv x))"
+    by (simp add: assms(2) zip_fst zip_snd)
+  also have "... = fold (\<union>) (map fv u) {} \<union> fold (\<union>) (map fv v) {}"
+    by (metis Sup_set_fold image_set)
+  have "card (fold (\<union>) (map fv_eq U) (fold (\<union>) (map fv_eq (zip u v)) {}))
+       = card (fold (\<union>) (map fv_eq U) (fold (\<union>) (map fv u) {} \<union> fold (\<union>) (map fv v) {}))"
+    by (simp add: \<open>(\<Union>x\<in>set u. fv x) \<union> (\<Union>x\<in>set v. fv x) = fold (\<union>) (map fv u) {} \<union> fold (\<union>) (map fv v) {}\<close> calculation)
+  moreover have "k2 (zip u v @ U) = (fold (+) (map (size_term \<circ> fst) (zip u v)) 0) + k2 U"
+    by (simp add: fold_plus_sum_list_rev k2_def)
+  have "... = (fold (+) (map size_term u) 0) + k2 U"
+    by (metis assms(2) map_fst_zip map_map)
+  then show ?thesis
+    by (simp add: \<open>k2 (zip u v @ U) = fold (+) (map (Unify.size_term \<circ> fst) (zip u v)) 0 + k2 U\<close>
+        calculation(2) fold_plus_sum_list_rev)
+qed
+
+function (sequential) unify :: "('f, 'v) equations \<Rightarrow> ('f, 'v) subst option"
   where
   "unify [] = Some Var"
 | "unify ((Var x, t) # U) = (
@@ -307,8 +406,65 @@ fun unify :: "('f, 'v) equations \<Rightarrow> ('f, 'v) subst option"
 | "unify ((u, Var y) # U) = unify ((Var y, u) # U)"
 | "unify ((Fun f u, Fun g v) # U) =
   (if (f = g \<and> length u = length v) then
-    unify(append (get_equations u v) U)
+    unify(append (zip u v) U)
   else
     None)"
+  by pat_completeness auto
+termination
+  apply(relation "measures [\<lambda>U. card (fv_eq_system U), k2, length]")
+      apply simp
+  apply simp
+     apply (simp add: measure_unify)
+  apply simp
+    apply (simp add: measure_simp)
+   apply (simp add: fold_plus_sum_list_rev)
+  apply simp
+  apply (simp add: measure_fun)
+  done
+
+(* TODO *)
+
+(*
+--------------------------------------------------
+Assignment 4
+--------------------------------------------------
+*)
+
+inductive wf_term :: "('f \<Rightarrow> nat) \<Rightarrow> ('f, 'v) term \<Rightarrow> bool" where
+  "wf_term ar (Var x)"
+| "(length l = ar f) \<and> (\<forall>t\<in>(set l). wf_term ar t) \<Longrightarrow> wf_term ar (Fun f l)"
+
+definition wf_subst :: "('f \<Rightarrow> nat) \<Rightarrow> ('f, 'v) subst \<Rightarrow> bool" where
+  "wf_subst ar \<sigma> = (\<forall>x. wf_term ar (\<sigma> x))"
+
+definition wf_eq :: "('f \<Rightarrow> nat) \<Rightarrow> ('f, 'v) equation \<Rightarrow> bool" where
+  "wf_eq ar eq \<equiv> (wf_term ar (fst eq)) \<and> (wf_term ar (snd eq))"
+
+inductive wf_eqs :: "('f \<Rightarrow> nat) \<Rightarrow> ('f, 'v) equations \<Rightarrow> bool" where
+  "wf_eqs ar []"
+| "(wf_eqs ar U) \<and> (wf_equation ar eq) \<Longrightarrow> wf_eqs ar (eq # U)"
+
+(* 4. (b) *)
+
+lemma wf_term_sapply[simp]:
+"\<lbrakk> wf_term arity t; wf_subst arity \<sigma> \<rbrakk> \<Longrightarrow> wf_term arity (\<sigma> · t)"
+proof (induction t)
+case (Var x)
+  then show ?case by (simp add: wf_subst_def)
+next
+  case (Fun x1a x2)
+  have "length x2 = arity x1a" using Fun.prems(1) wf_term.simps by fastforce
+  moreover have "\<forall>t\<in>(set x2). wf_term arity t" using Fun.prems(1) wf_term.cases by auto
+  then show ?case by (simp add: Fun.IH Fun.prems(2) calculation wf_term.intros(2))
+qed
+
+lemma wf_subst_scomp[simp]:
+"\<lbrakk> wf_subst arity \<sigma>; wf_subst arity \<tau> \<rbrakk> \<Longrightarrow> wf_subst arity (\<sigma> \<circ>s \<tau> )"
+  by (simp add: wf_subst_def)
+
+lemma wf_subst_unify:
+"\<lbrakk> unify eqs = Some \<sigma>; wf_eqs arity eqs \<rbrakk> \<Longrightarrow> wf_subst arity \<sigma>"
+  apply (induction eqs)
+  sorry
 
 end
