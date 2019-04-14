@@ -115,15 +115,6 @@ fun sdom :: "('f , 'v) subst \<Rightarrow> 'v set"
   where
   "sdom \<sigma> = {x. \<sigma> x \<noteq> Var x}"
 
-thm sorted_list_of_set
-
-definition set_to_list :: "'a set \<Rightarrow> 'a list"
-  where "set_to_list s = (SOME l. set l = s)"
-
-lemma  set_set_to_list:
-   "finite s \<Longrightarrow> set (set_to_list s) = s"
-unfolding set_to_list_def by (metis (mono_tags) finite_list some_eq_ex)
-
 fun sran :: "('f, 'v) subst \<Rightarrow> ('f, 'v) term set"
   where
 "sran \<sigma> = (\<Union>x\<in>sdom \<sigma>. {\<sigma> x})"
@@ -148,21 +139,46 @@ lemma svran_single_non_trivial [simp]:
   shows "svran (Var(x:=t)) = fv t"
   using assms by simp
 
+lemma fold_union_map[simp]:
+  assumes "x \<in> (fold (\<union>) (map f l) {})"
+  shows "x \<in> (\<Union>y\<in>(set l).f y)"
+  using assms by (metis Sup_set_fold set_map)
+
+lemma fv_fun[simp]: "fv (Fun f l) = (\<Union> x \<in> (set l). fv x)"
+  by (metis Sup_set_fold fv.simps(2) set_map)
+
 lemma fv_sapply_sdom_svran:
   assumes "x \<in> fv (\<sigma> · t)"
   shows "x \<in> (fv t - sdom \<sigma>) \<union> svran \<sigma>"
   using assms
-  apply (induction t)
-   apply auto
-     apply force
-    apply (metis empty_iff fv.simps(1) insert_iff)
-  sorry
+proof (induction t)
+  case (Var y)
+  then show ?case
+  proof (cases "y \<in> sdom \<sigma>")
+    case True
+    then have "\<sigma> y \<in> sran \<sigma>" by auto
+    then have "fv (\<sigma> y) \<subseteq> svran \<sigma>" by auto
+    then have "fv (\<sigma> · (Var y)) \<subseteq> svran \<sigma>" by simp
+    then show ?thesis using Var.prems by blast
+  next
+    case False
+    then show ?thesis using Var.prems by auto
+  qed
+next
+  case (Fun x1a x2)
+  have "x \<in> (\<Union>x2a \<in> (set x2). fv (\<sigma> · x2a))"
+    by (metis (no_types, lifting) Fun.prems SUP_UNION Sup.SUP_cong fv_fun fv_sapply)
+  also obtain x2a where "x2a \<in> (set x2) \<and> x \<in> fv (\<sigma> · x2a)"
+    using calculation by blast
+  then show ?case
+    by (metis Diff_iff Fun.IH UN_I UnE UnI1 UnI2 fv_fun)
+qed
 
 lemma sdom_scomp: "sdom (\<sigma> \<circ>s \<tau> ) \<subseteq> sdom \<sigma> \<union> sdom \<tau>"
   by auto
 
 lemma svran_scomp: "svran (\<sigma> \<circ>s \<tau> ) \<subseteq> svran \<sigma> \<union> svran \<tau>"
-  apply (auto simp add: sdom_scomp)
-  sorry
+  apply (auto simp add: sdom_scomp fv_sapply singleton_iff)
+  by (metis fv.simps(1) sapply.simps(2) singletonD)
 
 end
