@@ -2,7 +2,11 @@ theory Unify imports
   Main
 begin
 
-(* Assignment 1 *)
+(*
+--------------------------------------------------
+Assignment 1
+--------------------------------------------------
+*)
 
 datatype ('f , 'v) "term" = Var 'v | Fun 'f "('f, 'v) term list "
 
@@ -19,7 +23,7 @@ fun sapply :: "('f, 'v) subst \<Rightarrow> ('f, 'v) term \<Rightarrow> ('f, 'v)
   "sapply s (Fun f l) = Fun f (map (sapply s) l)"
 | "sapply s (Var x) = s x"
 
-lemma fv_sapply: "fv (\<sigma> · t) = (\<Union> x \<in> (fv t). fv (\<sigma> x))"
+lemma fv_sapply[simp]: "fv (\<sigma> · t) = (\<Union> x \<in> (fv t). fv (\<sigma> x))"
 proof (induction t)
   case (Var y)
   have "fv (\<sigma> · Var y) = fv (\<sigma> y)" by simp
@@ -74,15 +78,15 @@ fun scomp :: "('f, 'v) subst \<Rightarrow> ('f, 'v) subst \<Rightarrow> ('f, 'v)
   where
   "scomp \<sigma> \<tau> = (\<lambda> x. \<sigma> · \<tau>(x))"
 
-lemma scomp_sapply: "(\<sigma> \<circ>s \<tau> ) x = \<sigma> ·(\<tau> x)"
+lemma scomp_sapply[simp]: "(\<sigma> \<circ>s \<tau> ) x = \<sigma> ·(\<tau> x)"
   by simp
 
-lemma sapply_scomp_distrib: "(\<sigma> \<circ>s \<tau> ) · t = \<sigma> · (\<tau> · t)"
+lemma sapply_scomp_distrib[simp]: "(\<sigma> \<circ>s \<tau> ) · t = \<sigma> · (\<tau> · t)"
   apply (induction t)
    apply simp_all
   done
 
-lemma scomp_assoc: "(\<sigma> \<circ>s \<tau> ) \<circ>s q = \<sigma> \<circ>s (\<tau> \<circ>s q)"
+lemma scomp_assoc[simp]: "(\<sigma> \<circ>s \<tau> ) \<circ>s q = \<sigma> \<circ>s (\<tau> \<circ>s q)"
 proof (rule ext)
   show "(\<sigma> \<circ>s \<tau> \<circ>s q) x = (\<sigma> \<circ>s (\<tau> \<circ>s q)) x" for x
     using sapply_scomp_distrib by simp
@@ -147,7 +151,7 @@ lemma fold_union_map[simp]:
 lemma fv_fun[simp]: "fv (Fun f l) = (\<Union> x \<in> (set l). fv x)"
   by (metis Sup_set_fold fv.simps(2) set_map)
 
-lemma fv_sapply_sdom_svran:
+lemma fv_sapply_sdom_svran[simp]:
   assumes "x \<in> fv (\<sigma> · t)"
   shows "x \<in> (fv t - sdom \<sigma>) \<union> svran \<sigma>"
   using assms
@@ -174,11 +178,70 @@ next
     by (metis Diff_iff Fun.IH UN_I UnE UnI1 UnI2 fv_fun)
 qed
 
-lemma sdom_scomp: "sdom (\<sigma> \<circ>s \<tau> ) \<subseteq> sdom \<sigma> \<union> sdom \<tau>"
+lemma sdom_scomp[simp]: "sdom (\<sigma> \<circ>s \<tau> ) \<subseteq> sdom \<sigma> \<union> sdom \<tau>"
   by auto
 
-lemma svran_scomp: "svran (\<sigma> \<circ>s \<tau> ) \<subseteq> svran \<sigma> \<union> svran \<tau>"
-  apply (auto simp add: sdom_scomp fv_sapply singleton_iff)
+lemma svran_scomp[simp]: "svran (\<sigma> \<circ>s \<tau> ) \<subseteq> svran \<sigma> \<union> svran \<tau>"
+  apply (auto simp add: singleton_iff)
   by (metis fv.simps(1) sapply.simps(2) singletonD)
+
+(*
+--------------------------------------------------
+Assignment 2
+--------------------------------------------------
+*)
+
+type_synonym ('f, 'v) equation = "('f, 'v) term \<times> ('f, 'v) term"
+type_synonym ('f, 'v) eq_system = "('f, 'v) equation list"
+
+fun fv_eq :: "('f , 'v) equation \<Rightarrow> 'v set" where
+  "fv_eq eq = (fv (fst eq)) \<union> (fv (snd eq))"
+
+fun fv_eq_system :: "('f, 'v) eq_system \<Rightarrow> 'v set" where
+  "fv_eq_system l = fold (\<union>) (map fv_eq l) {}"
+
+fun sapply_eq :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equation \<Rightarrow> ('f, 'v) equation" (infixr "·" 67)
+  where
+  "sapply_eq \<sigma> eq = (sapply \<sigma> (fst eq), sapply \<sigma> (snd eq))"
+
+fun sapply_eq_system :: "('f, 'v) subst \<Rightarrow> ('f, 'v) eq_system \<Rightarrow> ('f, 'v) eq_system" (infixr "·" 67)
+  where
+"sapply_eq_system \<sigma> l = map (sapply_eq \<sigma>) l"
+
+lemma fv_sapply_eq[simp]: "fv_eq (\<sigma> · eq) = (\<Union> x \<in> (fv_eq eq). fv (\<sigma> x))"
+  by simp
+
+lemma fv_sapply_eq_system[simp]: "fv_eq_system (\<sigma> · s) = (\<Union> x \<in> (fv_eq_system s). fv (\<sigma> x))"
+proof (induction s)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons eq s)
+  have "fv_eq_system (\<sigma> · (eq # s)) = fold (\<union>) (map fv_eq (\<sigma> · (eq # s))) {}" by simp
+  also have "... = (\<Union>y\<in>(set (\<sigma> · (eq # s))). fv_eq y)" by (metis Sup_set_fold set_map)
+  also have "... = (\<Union>y\<in>(set (\<sigma> · s)). fv_eq y) \<union> (\<Union>y\<in>(set (\<sigma> · [eq])). fv_eq y)" by (simp add: inf_sup_aci(5))
+  have "(\<Union>y\<in>(set (\<sigma> · s)). fv_eq y) = fv_eq_system (\<sigma> · s)"
+    by (metis Sup_set_fold fv_eq_system.elims set_map)
+  have "... = (\<Union> x \<in> (fv_eq_system s). fv (\<sigma> x))" using Cons.IH by blast
+  have "(\<Union>y\<in>(set (\<sigma> · [eq])). fv_eq y) =  (\<Union>x\<in>(fv_eq_system [eq]). fv (\<sigma> x))"
+    by auto
+  also have "fv_eq_system (\<sigma> · (eq # s)) =
+             (\<Union> x \<in> (fv_eq_system s). fv (\<sigma> x)) \<union> (\<Union>x\<in>(fv_eq_system [eq]). fv (\<sigma> x))"
+    using Cons.IH \<open>(\<Union>y\<in>set (\<sigma> · s). fv_eq y) = fv_eq_system (\<sigma> · s)\<close> calculation by auto
+  also have "... = (\<Union> x \<in> (fv_eq_system (eq # s)). fv (\<sigma> x))"
+    by (metis (no_types, lifting) Sup_set_fold UN_Un UN_insert Union_image_empty empty_set fv_eq_system.elims inf_sup_aci(5) list.simps(15) set_map)
+  then show ?case
+    using \<open>fv_eq_system (\<sigma> · (eq # s)) = (\<Union>x\<in>fv_eq_system s. fv (\<sigma> x)) \<union> (\<Union>x\<in>fv_eq_system [eq]. fv (\<sigma> x))\<close> by auto
+qed
+
+lemma sapply_scomp_distrib_eq[simp]: "(\<sigma> \<circ>s \<tau>) · (eq :: ('f, 'v) equation) = \<sigma> · (\<tau> · eq)"
+  apply auto
+  using sapply_scomp_distrib apply force+
+  done
+
+lemma sapply_scomp_distrib_eq_system[simp]: "(\<sigma> \<circ>s \<tau>) · (s :: ('f, 'v) eq_system) = \<sigma> · (\<tau> · s)"
+  apply auto
+  using sapply_scomp_distrib apply force+
+  done
 
 end
