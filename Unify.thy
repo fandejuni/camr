@@ -324,16 +324,96 @@ proof -
   then show ?thesis by (simp add: calculation)
 qed
 
+lemma finite_fv: "finite (fv t)"
+proof (induction t)
+  case (Var x)
+  then show ?case by auto
+next
+  case (Fun x1a x2)
+  have "fv (Fun x1a x2) = (\<Union>x2a\<in>(set x2). fv x2a)" by (meson fv_fun)
+  then show ?case by (simp add: Fun.IH)
+qed
+
+lemma finite_fv_eq: "finite (fv_eq eq)"
+  by (simp add: finite_fv)
+
+lemma finite_fold_fv:
+  assumes "finite s" 
+  shows "finite (fold (\<union>) (map fv_eq U) s)"
+  using assms
+proof (induction U)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons a U)
+  then show ?case
+    by (metis Sup_set_fold UN_insert Un_infinite finite_UnI finite_fv_eq fold_union_basic list.set(2) set_map)
+qed
+
+lemma prelim_unify_equations:
+  assumes "x \<notin> fv t"
+  shows "x \<notin> fv_eq_system (sapply_eq_system (Var(x := t)) U)"
+proof (induction U)
+  case Nil
+  then show ?case by auto
+next
+  case (Cons a U)
+  have "fv_eq_system (Var(x := t) · (a # U)) = (fv_eq_system (Var(x := t) · U)) \<union> (fv_eq (Var(x := t) · a))"
+    by (metis fold_simps(2) fold_union_basic fv_eq_system.elims list.simps(9) sapply_eq_system.elims sup_bot.right_neutral)
+  moreover have "x \<notin> fv_eq_system (Var(x := t) · U)"
+    using Cons.IH by blast
+  moreover have "x \<notin> (fv_eq (Var(x := t) · a))" by (simp add: assms)
+  then show ?case by (metis Cons.IH UnE calculation(1))
+qed
+
+lemma prelim_unify_2:
+  assumes "x \<notin> fv t"
+  shows "(fold (\<union>) (map (fv_eq \<circ> (·) (Var(x := t))) U) {}) \<subseteq> (fold (\<union>) (map fv_eq U) (insert x (fv t)))"
+proof (rule subsetI)
+  fix y
+  assume "y \<in> fold (\<union>) (map (fv_eq \<circ> (·) (Var(x := t))) U) {}"
+  thus "y \<in> fold (\<union>) (map fv_eq U) (insert x (fv t))"
+  proof (induction U)
+    case Nil
+    then show ?case by simp
+  next
+    case (Cons a U)
+    then show ?case
+    proof (cases "y \<in> fold (\<union>) (map (fv_eq \<circ> (·) (Var(x := t))) (U)) {}")
+      case True
+      then show ?thesis
+        by (metis (no_types, lifting) Cons.IH UnCI UnE fold_map fold_simps(2) fold_union_basic)
+    next
+      case False
+      have "y \<in> fv_eq (sapply_eq (Var(x := t)) a)"
+        by (smt Cons.prems False UnE comp_apply fold_map fold_simps(2) fold_union_basic sup_bot.right_neutral)
+      then show ?thesis
+        by (smt UN_iff UnCI comp_apply fold_map fold_simps(2) fold_union_basic fun_upd_other fun_upd_same fv.simps(1) fv_sapply_eq insertI2 singletonD)
+    qed
+  qed
+qed
+
 lemma measure_unify:
   assumes "x \<notin> fv t"
   shows "card (fold (\<union>) (map (fv_eq \<circ> (·) (Var(x := t))) U) {})
        < card (fold (\<union>) (map fv_eq U) (insert x (fv t)))"
+  (is "card (?s1) < card (?s2)")
   using assms
 proof -
-  have "card (fold (\<union>) (map (fv_eq \<circ> (·) (Var(x := t))) U) {})
-        = card (\<Union>y\<in>(set U).(fv_eq \<circ> (·) (Var(x := t))) y)"
-    by (metis Sup_set_fold set_map)
-  then show ?thesis sorry
+  have "?s1 \<subseteq> ?s2"
+    by (simp add: assms prelim_unify_2)
+  moreover have "x \<notin> ?s1"
+    using assms prelim_unify_equations by fastforce
+  moreover have "x \<in> ?s2"
+    using fold_union_basic by fastforce
+  have "?s1 \<subset> ?s2"
+    using \<open>x \<in> fold (\<union>) (map fv_eq U) (insert x (fv t))\<close> calculation(1) calculation(2) by blast
+  moreover have "finite (set U)" by simp
+  also have "finite ?s1"
+    by (meson calculation(1) finite_fold_fv finite_fv finite_insert finite_subset)
+  moreover have "finite ?s2" by (simp add: finite_fold_fv finite_fv)
+  then show ?thesis
+    by (simp add: calculation(3) psubset_card_mono)
 qed
 
 lemma measure_simp:
@@ -413,7 +493,6 @@ function (sequential) unify :: "('f, 'v) equations \<Rightarrow> ('f, 'v) subst 
 termination
   apply(relation "measures [\<lambda>U. card (fv_eq_system U), k2, length]")
       apply simp
-  apply simp
      apply (simp add: measure_unify)
   apply simp
     apply (simp add: measure_simp)
@@ -421,6 +500,8 @@ termination
   apply simp
   apply (simp add: measure_fun)
   done
+
+value "(Var((2 :: nat) := (Var 1))) · [(Var 1, Var 1), (Fun (10 :: nat) [], Fun (10 :: nat) [])]"
 
 (* TODO *)
 
