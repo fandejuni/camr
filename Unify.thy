@@ -366,6 +366,14 @@ next
   then show ?case by (metis Cons.IH UnE calculation(1))
 qed
 
+lemma prelim_prelim_unify:
+  assumes "y \<in> fv_eq (Var(x := t) · a)"
+  shows "y \<in> fold (\<union>) (map fv_eq (a # U)) (insert x (fv t))"
+  using assms
+  apply (auto simp add: Sup_set_fold UnI1 UnI2 assms fun_upd_other fun_upd_same insertI1 insertI2 list.simps(15) singletonD)
+  apply (metis (mono_tags, hide_lams) Sup_set_fold Un_iff Un_insert_right fold_union_basic fv.simps(1) fv_eq.simps inf_sup_aci(5) insert_iff singleton_iff)+
+  done
+
 lemma prelim_unify_2:
   assumes "x \<notin> fv t"
   shows "(fold (\<union>) (map (fv_eq \<circ> (·) (Var(x := t))) U) {}) \<subseteq> (fold (\<union>) (map fv_eq U) (insert x (fv t)))"
@@ -392,8 +400,7 @@ proof (rule subsetI)
         then show ?thesis
           by (metis Cons.prems False UnE comp_apply fold_union_basic)
       qed
-      then show ?thesis
-        by (smt UN_iff UnCI comp_apply fold_map fold_simps(2) fold_union_basic fun_upd_other fun_upd_same fv.simps(1) fv_sapply_eq insertI2 singletonD)
+      then show ?thesis by (meson prelim_prelim_unify)
     qed
   qed
 qed
