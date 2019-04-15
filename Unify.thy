@@ -386,7 +386,12 @@ proof (rule subsetI)
     next
       case False
       have "y \<in> fv_eq (sapply_eq (Var(x := t)) a)"
-        by (smt Cons.prems False UnE comp_apply fold_map fold_simps(2) fold_union_basic sup_bot.right_neutral)
+      proof -
+        have "\<forall>ps p f. fold (\<union>) (map f ps) (f (p::('b, 'a) Unify.term \<times> ('b, 'a) Unify.term)) = fold (\<union>) (map f (p # ps)) ({}::'a set)"
+          by simp
+        then show ?thesis
+          by (metis Cons.prems False UnE comp_apply fold_union_basic)
+      qed
       then show ?thesis
         by (smt UN_iff UnCI comp_apply fold_map fold_simps(2) fold_union_basic fun_upd_other fun_upd_same fv.simps(1) fv_sapply_eq insertI2 singletonD)
     qed
@@ -408,12 +413,8 @@ proof -
     using fold_union_basic by fastforce
   have "?s1 \<subset> ?s2"
     using \<open>x \<in> fold (\<union>) (map fv_eq U) (insert x (fv t))\<close> calculation(1) calculation(2) by blast
-  moreover have "finite (set U)" by simp
-  also have "finite ?s1"
-    by (meson calculation(1) finite_fold_fv finite_fv finite_insert finite_subset)
   moreover have "finite ?s2" by (simp add: finite_fold_fv finite_fv)
-  then show ?thesis
-    by (simp add: calculation(3) psubset_card_mono)
+  then show ?thesis by (simp add: calculation(3) psubset_card_mono)
 qed
 
 lemma measure_simp:
