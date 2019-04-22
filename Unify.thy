@@ -13,6 +13,7 @@ datatype ('f , 'v) "term" = Var 'v | Fun 'f "('f, 'v) term list"
 fun fv :: "('f , 'v) term \<Rightarrow> 'v set" where
   "fv (Var x) = {x}"
 | "fv (Fun f l) = fold (\<union>) (map fv l) {}"
+(* | "fv (Fun f l) = (\<Union>x\<in>(set l).(fv x))" *)
 
 value "fv (Fun (1 :: nat) [Var (0 :: nat), Var 1, Fun 2 [Var 2, Fun 3 [Var 5]]])"
 
@@ -52,28 +53,6 @@ lemma sapply_cong:
   apply (metis Sup_set_fold UnI1 Union_insert insert_absorb list.map(2) list.set(2) set_map)
   done
 
-(*
-Tentative of Isar proof
-proof (induction t)
-  have "\<forall>x. \<sigma> · (Var x) = \<tau> · (Var x)"
-  proof (rule allI)
-    fix x
-    show "\<sigma> · (Var x) = \<tau> · (Var x)"
-    proof -
-      assume "t = Var x"
-      have "\<sigma> · (Var x) = \<sigma> x" by simp
-      moreover have "x \<in> fv (Var x)" by simp
-      also have "\<sigma> x = \<tau> x" using \<open>t = Var x\<close> assms by auto
-      also have "\<tau> x = \<tau>  · (Var x)" by simp
-      also have "\<sigma> · (Var x) =  \<tau>  · (Var x)"
-        using \<open>\<sigma> x = \<tau> x\<close> \<open>\<sigma> · Var x = \<sigma> x\<close> \<open>\<tau> x = \<tau> · Var x\<close> \<open>t = Var x\<close> by presburger
-      then show "\<sigma> · Var x = \<tau> · Var x" by simp
-next
-  case (Fun f l)
-  then show ?thesis ? ? ?
-qed
-*)
-
 fun scomp :: "('f, 'v) subst \<Rightarrow> ('f, 'v) subst \<Rightarrow> ('f, 'v) subst" (infixl "\<circ>s" 75)
   where
   "scomp \<sigma> \<tau> = (\<lambda> x. \<sigma> · \<tau>(x))"
@@ -97,8 +76,6 @@ proof (rule ext)
   show "(\<sigma> \<circ>s Var) x = \<sigma> x" for x
     by simp
 qed
-
-thm term.induct
 
 lemma Var_id: "Var · t = t"
 proof (induction t)
@@ -500,24 +477,311 @@ function (sequential) unify :: "('f, 'v) equations \<Rightarrow> ('f, 'v) subst 
   by pat_completeness auto
 termination
   apply(relation "measures [\<lambda>U. card (fv_eq_system U), k2, length]")
-      apply simp
-     apply (simp add: measure_unify)
-  apply simp
-    apply (simp add: measure_simp)
-   apply (simp add: fold_plus_sum_list_rev)
-  apply simp
+      apply (simp add: measure_unify measure_simp)+
+   apply (simp add: fold_plus_sum_list_rev measure_fun)
   apply (simp add: measure_fun)
   done
 
-value "(Var((2 :: nat) := (Var 1))) · [(Var 1, Var 1), (Fun (10 :: nat) [], Fun (10 :: nat) [])]"
+(* 3. (b) *)
 
-(* TODO *)
+lemma alternative_definition_unifiess:
+ "unifiess \<tau> U \<longleftrightarrow> (\<forall>eq\<in>(set U). unifies \<tau> eq)"
+proof (induction U)
+  case Nil
+  then show ?case using unifiess_empty by auto
+next
+  case (Cons a U)
+  have "unifiess \<tau> (a # U) \<longleftrightarrow> (\<forall>eq\<in>set (a # U). unifies \<tau> eq)"
+  proof (rule iffI)
+    assume "unifiess \<tau> (a # U)"
+    show "\<forall>eq\<in>set (a # U). unifies \<tau> eq"
+      by (metis Cons.IH \<open>unifiess \<tau> (a # U)\<close> list.discI list.sel(3) set_ConsD unifiess.simps)
+  next
+    assume "\<forall>eq\<in>set (a # U). unifies \<tau> eq"
+    show  "unifiess \<tau> (a # U)"
+      by (simp add: Cons.IH \<open>\<forall>eq\<in>set (a # U). unifies \<tau> eq\<close> unifiess_rec)
+  qed
+  then show ?case by blast
+qed
+
+lemma separate_unifiess:
+  "unifiess \<tau> (U @ V) \<longleftrightarrow> (unifiess \<tau> U) \<and> (unifiess \<tau> V)"
+proof (rule iffI)
+  assume "unifiess \<tau> (U @ V)"
+  show "(unifiess \<tau> U) \<and> (unifiess \<tau> V)"
+  proof -
+    have "unifiess \<tau> (U @ V) = (\<forall>eq\<in>set (U @ V). unifies \<tau> eq)"
+    by (simp add: alternative_definition_unifiess)
+  also have "... = (\<forall>eq\<in>set U. unifies \<tau> eq) \<and> (\<forall>eq\<in>set V. unifies \<tau> eq)"
+    using \<open>unifiess \<tau> (U @ V)\<close> calculation by auto
+  also have "... = (unifiess \<tau> U) \<and> (unifiess \<tau> V)"
+    using \<open>unifiess \<tau> (U @ V)\<close> alternative_definition_unifiess calculation by blast
+  then show ?thesis
+    using alternative_definition_unifiess calculation by blast
+qed
+next
+  assume "(unifiess \<tau> U) \<and> (unifiess \<tau> V)"
+  show "unifiess \<tau> (U @ V)"
+  proof -
+    have "unifiess \<tau> (U @ V) = (\<forall>eq\<in>set (U @ V). unifies \<tau> eq)"
+    by (simp add: alternative_definition_unifiess)
+  also have "... = (\<forall>eq\<in>set U. unifies \<tau> eq) \<and> (\<forall>eq\<in>set V. unifies \<tau> eq)"
+    using \<open>unifiess \<tau> U \<and> unifiess \<tau> V\<close> alternative_definition_unifiess by fastforce
+  also have "... = (unifiess \<tau> U) \<and> (unifiess \<tau> V)"
+    using \<open>unifiess \<tau> U \<and> unifiess \<tau> V\<close> alternative_definition_unifiess by blast
+  then show ?thesis
+    using alternative_definition_unifiess calculation by blast
+qed
+qed
+
+lemma case_unify:
+  assumes h1: "\<And>\<sigma>. \<lbrakk>x \<notin> fv t; unify (Var(x := t) · U) = Some \<sigma>\<rbrakk> \<Longrightarrow> unifiess \<sigma> (Var(x := t) · U)"
+    and h2: "\<And>\<sigma>. \<lbrakk>\<not> x \<notin> fv t; Var x = t; unify U = Some \<sigma>\<rbrakk> \<Longrightarrow> unifiess \<sigma> U"
+    and h3: "unify ((Var x, t) # U) = Some \<sigma>"
+  shows "unifiess \<sigma> ((Var x, t) # U)"
+  using assms
+proof (cases "x \<in> fv t")
+  case True
+  then show ?thesis
+    by (metis assms(2) assms(3) option.discI unifies_eq unifiess_rec unify.simps(2))
+next
+  case False
+  obtain \<tau> where "Some \<tau> = lifted_comp (unify (Var(x := t) · U)) (Var(x := t))"
+    using False h3 by auto
+  also obtain \<sigma> where "(Some \<sigma>) = (unify (Var(x := t) · U))"
+    by (metis calculation lifted_comp.elims)
+  have "\<tau> =  \<sigma> \<circ>s (Var(x := t))"
+    by (metis False \<open>Some \<sigma> = unify (Var(x := t) · U)\<close> calculation h3 lifted_comp.simps(2) map_upd_eqD1 sapply_eq_system.simps unify.simps(2))
+  have "\<tau> · (Var x) = (\<sigma> \<circ>s (Var(x := t))) · (Var x)"
+    by (simp add: \<open>\<tau> = \<sigma> \<circ>s Var(x := t)\<close>)
+  have "... = \<sigma> · t"
+    by simp
+  moreover have "... = (\<sigma> \<circ>s (Var(x := t))) · t"
+    by (metis (mono_tags, lifting) False fun_upd_other sapply_cong scomp.elims scomp_Var)
+  moreover have "... = \<tau> · t"
+    by (simp add: \<open>\<tau> = \<sigma> \<circ>s Var(x := t)\<close>)
+  then show ?thesis
+    by (metis False \<open>Some \<sigma> = unify (Var(x := t) · U)\<close> \<open>\<sigma> \<circ>s Var(x := t) · Var x = \<sigma> · t\<close> \<open>\<sigma> · t = \<sigma> \<circ>s Var(x := t) · t\<close> \<open>\<tau> = \<sigma> \<circ>s Var(x := t)\<close> calculation h1 h3 option.inject unifies_eq unifies_sapply_eq_sys unifiess_rec unify.simps(2))
+qed
+
+lemma unifiess_zip_simple_2:
+  assumes "unifiess \<sigma> (zip u v @ U)"
+  and "length u = length v"
+  shows "unifiess \<sigma> U"
+  using assms
+proof (induction u arbitrary: v)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons a u)
+  obtain b and vv where "v = b # vv"
+    by (metis Cons.prems(2) Suc_length_conv)
+  then show ?case
+    using Cons.IH Cons.prems(1) Cons.prems(2) unifiess.simps by auto
+qed
+
+lemma unifiess_zip_simple_4:
+  assumes "unifiess \<sigma> (U @ V)"
+  shows "unifiess \<sigma> U"
+  using assms
+proof (induction U)
+  case Nil
+  then show ?case
+  by (simp add: unifiess_empty)
+next
+  case (Cons a U)
+  then show ?case
+    by (metis (no_types, lifting) append_is_Nil_conv hd_append2 list.sel(1) list.sel(3) tl_append2 unifiess.simps)
+qed
+
+lemma test:
+  assumes "unifiess \<sigma> u"
+  shows "map (sapply \<sigma>) (map fst u) = map (sapply \<sigma>) (map snd u)"
+  using assms
+proof (induction u)
+  case (unifiess_empty \<sigma>)
+  then show ?case
+    by simp
+next
+  case (unifiess_rec \<sigma> s eq)
+  then show ?case
+    using unifies.simps by force
+qed
+  
+lemma case_fun:
+  assumes " \<lbrakk>f = g \<and> length u = length v; unify (zip u v @ U) = Some \<sigma>\<rbrakk> \<Longrightarrow> unifiess \<sigma> (zip u v @ U)"
+and "unify ((Fun f u, Fun g v) # U) = Some \<sigma>"
+shows "unifiess \<sigma> ((Fun f u, Fun g v) # U)"
+  using assms
+proof -
+  obtain "f = g" and "length u = length v"
+    using assms(2) option.discI by fastforce
+  have "unify (zip u v @ U) = Some \<sigma>"
+    using \<open>f = g\<close> \<open>length u = length v\<close> assms(2) by auto
+  have "unifiess \<sigma> (zip u v @ U)"
+    by (simp add: \<open>f = g\<close> \<open>length u = length v\<close> \<open>unify (zip u v @ U) = Some \<sigma>\<close> assms(1))
+  have "unifiess \<sigma> U"
+    using \<open>length u = length v\<close> \<open>unifiess \<sigma> (zip u v @ U)\<close> unifiess_zip_simple_2 by blast
+  have "unifiess \<sigma> (zip u v)"
+    using \<open>unifiess \<sigma> (zip u v @ U)\<close> unifiess_zip_simple_4 by blast
+  have "unifies \<sigma> (Fun f u, Fun g v)"
+    by (metis \<open>f = g\<close> \<open>length u = length v\<close> \<open>unifiess \<sigma> (zip u v)\<close> map_fst_zip map_snd_zip sapply.simps(1) test unifies_eq)
+  then show ?thesis
+    by (simp add: \<open>unifiess \<sigma> U\<close> unifiess_rec)
+qed
+
+lemma
+  assumes "unify U = Some \<sigma>"
+  shows "unifiess \<sigma> U"
+  using assms
+  apply (induction arbitrary: \<sigma> rule: unify.induct)
+     apply (simp add: unifiess_empty)
+    apply (meson case_unify)
+  apply (metis list.discI list.sel(1) list.sel(3) prod.sel(1) prod.sel(2) unifies.simps unifiess.simps unify.simps(3))
+  by (simp add: case_fun)
+
+(*
+
+Hint: Split the proof into two parts and prove them separately by computational induction.
+(i) If unify returns a substitution, it is a unifier.
+(ii) If unify returns a substitution \<sigma> and there is another unifier \<tau> , then
+\<tau> = \<rho> ◦s \<sigma> for some \<rho>.
+
+*)
+
+lemma case_mgu_unify:
+  assumes "\<And>\<sigma> \<tau>. \<lbrakk>x \<notin> fv t; unify (Var(x := t) · U) = Some \<sigma>; unifiess \<tau> (Var(x := t) · U)\<rbrakk> \<Longrightarrow> \<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>"
+and "\<And>\<sigma> \<tau>. \<lbrakk>\<not> x \<notin> fv t; Var x = t; unify U = Some \<sigma>; unifiess \<tau> U\<rbrakk> \<Longrightarrow> \<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>"
+and "unify ((Var x, t) # U) = Some \<sigma>"
+and "unifiess \<tau> ((Var x, t) # U)"
+shows "\<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>"
+proof (cases "x \<in> fv t")
+  case True
+  then show ?thesis
+    by (metis assms(2) assms(3) assms(4) list.discI list.sel(3) option.discI unifiess.simps unify.simps(2))
+next
+  case False
+  have "\<tau> · (Var x) = \<tau> · t"
+    by (metis assms(4) list.discI list.sel(1) prod.sel(1) prod.sel(2) unifies.simps unifiess.simps)
+  have "\<forall>(u,w)\<in>(set U). \<tau> · u = \<tau> · w"
+    by (metis (mono_tags, lifting) alternative_definition_unifiess assms(4) case_prodI2 insert_iff list.set(2) prod.sel(1) prod.sel(2) unifies.simps)
+  have "unifiess \<tau> (Var(x := t) · U)"
+    sorry
+  then show ?thesis sorry
+qed
+
+lemma useful_1:
+  assumes "unifies \<tau> (Fun f (map fst (a # u)), Fun g (map snd (a # u)))"
+  shows "unifies \<tau> (Fun f (map fst u), Fun g (map snd u))"
+proof -
+  have "map (sapply \<tau>) (map fst (a # u)) = map (sapply \<tau>) (map snd (a # u))"
+    by (metis assms prod.sel(1) prod.sel(2) sapply.simps(1) term.inject(2) unifies.simps)
+  also have "map (sapply \<tau>) ((fst a) # (map fst u)) = map (sapply \<tau>) ((snd a) # (map snd u))"
+    using calculation by auto
+  moreover have "map (sapply \<tau>) (map fst u) = map (sapply \<tau>) (map snd u)"
+    using \<open>map ((·) \<tau>) (fst a # map fst u) = map ((·) \<tau>) (snd a # map snd u)\<close> by auto
+  then show ?thesis
+    by (metis (no_types, lifting) assms prod.sel(1) prod.sel(2) sapply.simps(1) term.inject(2) unifies.simps)
+qed
+
+lemma useful_2:
+  assumes "unifies \<tau> (Fun f (map fst (a # u)), Fun g (map snd (a # u)))"
+  shows "unifies \<tau> (fst a, snd a)"
+proof -
+  have "map (sapply \<tau>) (map fst (a # u)) = map (sapply \<tau>) (map snd (a # u))"
+    by (metis assms prod.sel(1) prod.sel(2) sapply.simps(1) term.inject(2) unifies.simps)
+  moreover have "map (sapply \<tau>) ((fst a) # (map fst u)) = map (sapply \<tau>) ((snd a) # (map snd u))"
+    using calculation by auto
+  moreover have "map (sapply \<tau>) [fst a] = map (sapply \<tau>) [snd a]"
+    using \<open>map ((·) \<tau>) (fst a # map fst u) = map ((·) \<tau>) (snd a # map snd u)\<close> by auto
+  then show ?thesis
+    using unifies_eq by fastforce
+qed
+
+lemma unifies_fun_args:
+  assumes "unifies \<tau> (Fun f (map fst u), Fun g (map snd u))"
+  shows "unifiess \<tau> u"
+  using assms
+proof (induction u)
+  case Nil
+  then show ?case
+    by (simp add: unifiess_empty)
+next
+  case (Cons a u)
+  then show ?case
+    by (metis prod.collapse unifiess_rec useful_1 useful_2)
+qed
+
+lemma case_mgu_fun:
+  assumes " \<lbrakk>f = g \<and> length u = length v; unify (zip u v @ U) = Some \<sigma>; unifiess \<tau> (zip u v @ U)\<rbrakk>
+        \<Longrightarrow> \<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>"
+and "unify ((Fun f u, Fun g v) # U) = Some \<sigma>"
+and "unifiess \<tau> ((Fun f u, Fun g v) # U)"
+shows "\<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>"
+  using assms
+proof -
+  obtain "f = g" and "length u = length v"
+    using assms(2) by fastforce
+  moreover have "unify (zip u v @ U) = Some \<sigma>"
+    using \<open>f = g\<close> \<open>length u = length v\<close> assms(2) by auto
+  moreover have "unifiess \<tau> (zip u v @ U)"
+  proof -
+    have "unifiess \<tau> U"
+      by (metis assms(3) list.discI list.sel(3) unifiess.simps)
+    moreover have "unifies \<tau> (Fun f u, Fun g v)"
+      by (metis assms(3) list.discI list.sel(1) unifiess.simps)
+    moreover have "unifiess \<tau> (zip u v)"
+      by (metis \<open>\<And>thesis. (\<lbrakk>f = g; length u = length v\<rbrakk> \<Longrightarrow> thesis) \<Longrightarrow> thesis\<close> \<open>unifies \<tau> (Fun f u, Fun g v)\<close> map_fst_zip map_snd_zip unifies_fun_args)
+    then show ?thesis
+      by (simp add: calculation separate_unifiess)
+  qed
+  then show ?thesis
+    using assms(1) calculation(1) calculation(2) calculation(3) by blast
+qed
+
+lemma
+  assumes "unify U = Some \<sigma>"
+  and "unifiess \<tau> U"
+shows "\<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>"
+  using assms
+proof (induction arbitrary: \<sigma> \<tau> rule: unify.induct)
+  case 1
+  then show ?case by simp
+next
+  case (2 x t U)
+  then show ?case
+    by (metis (no_types, lifting) case_mgu_unify)
+next
+  case (3 v va y U)
+  then show ?case
+    by (metis list.discI list.sel(1) list.sel(3) prod.sel(1) prod.sel(2) unifies.simps unifiess.simps unify.simps(3))
+next
+  case (4 f u g v U)
+then show ?case
+  by (meson case_mgu_fun)
+qed
+
+(*
+lemma
+  assumes "unify U = Some \<sigma>"
+
+  shows "unifiess \<sigma> U"
+  using assms
+  apply (induction arbitrary: \<sigma> rule: unify.induct)
+     apply (simp add: unifiess_empty)
+    apply (meson case_unify)
+  apply (metis list.discI list.sel(1) list.sel(3) prod.sel(1) prod.sel(2) unifies.simps unifiess.simps unify.simps(3))
+  by (simp add: case_fun)
+
+*)
 
 (*
 --------------------------------------------------
 Assignment 4
 --------------------------------------------------
 *)
+
+(* 4. (a) *)
 
 inductive wf_term :: "('f \<Rightarrow> nat) \<Rightarrow> ('f, 'v) term \<Rightarrow> bool" where
   "wf_term ar (Var x)"
@@ -554,6 +818,7 @@ lemma wf_subst_scomp[simp]:
 lemma wf_subst_unify:
 "\<lbrakk> unify eqs = Some \<sigma>; wf_eqs arity eqs \<rbrakk> \<Longrightarrow> wf_subst arity \<sigma>"
   apply (induction eqs)
-  sorry
+   apply (simp add: wf_subst_def wf_term.intros(1))
+  oops
 
 end
