@@ -1181,7 +1181,6 @@ next
     and "sdom \<sigma> \<subseteq> fv_eq_system (zip u v @ U)"
     and "svran \<sigma> \<subseteq> fv_eq_system (zip u v @ U)"
     using "4.IH" \<open>f = g \<and> length u = length v\<close> \<open>unify (zip u v @ U) = Some \<sigma>\<close> by blast
-  
   have "svran \<sigma> \<subseteq> fv_eq_system ((Fun f u, Fun g v) # U)"
     using \<open>f = g \<and> length u = length v\<close> \<open>svran \<sigma> \<subseteq> fv_eq_system (zip u v @ U)\<close> fv_eq_fun_lists by fastforce
   moreover have "sdom \<sigma> \<subseteq> fv_eq_system ((Fun f u, Fun g v) # U)"
@@ -1207,6 +1206,9 @@ next
     then show ?thesis
       by (metis "2.IH"(2) "2.prems" option.discI unify.simps(2))
   next
+
+  (* CASE UNIFY *)
+
     case False
     have "\<not> (unify ((Var(x := t)) · ((Var x, t) # U)) = None)"
     proof (rule ccontr)
