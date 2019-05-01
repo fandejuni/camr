@@ -665,9 +665,29 @@ proof (rule ext)
   qed
 qed
 
+lemma unifies_equal_sapply:
+  assumes "unifiess \<sigma> U"
+  and "sapply \<sigma> = sapply \<tau>"
+shows "unifiess \<tau> U"
+  by (metis alternative_definition_unifiess assms(1) assms(2) unifies.simps)
+
+lemma sapply_equal:
+  assumes "sapply \<sigma> = sapply \<tau>"
+  shows "\<sigma> = \<tau>"
+proof (rule ext)
+  show "\<sigma> x = \<tau> x" for x
+  proof -
+    have "\<sigma> x = sapply \<sigma> (Var x)" by (metis assms sapply.simps(2))
+    also have "... = sapply \<tau> (Var x)" by (simp add: assms)
+    also have "... = \<tau> x" by simp
+    then show ?thesis by (simp add: calculation)
+  qed
+qed
+
 lemma case_mgu_unify:
-  assumes "\<And>\<sigma> \<tau>. \<lbrakk>x \<notin> fv t; unify (Var(x := t) · U) = Some \<sigma>; unifiess \<tau> (Var(x := t) · U)\<rbrakk> \<Longrightarrow> \<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>"
-and "\<And>\<sigma> \<tau>. \<lbrakk>\<not> x \<notin> fv t; Var x = t; unify U = Some \<sigma>; unifiess \<tau> U\<rbrakk> \<Longrightarrow> \<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>"
+  fixes \<sigma>
+  assumes "\<And>\<sigma>2 \<tau>. \<lbrakk>x \<notin> fv t; unify (Var(x := t) · U) = Some \<sigma>2; unifiess \<tau> (Var(x := t) · U)\<rbrakk> \<Longrightarrow> \<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>2"
+and "\<And>\<sigma>2 \<tau>. \<lbrakk>\<not> x \<notin> fv t; Var x = t; unify U = Some \<sigma>2; unifiess \<tau> U\<rbrakk> \<Longrightarrow> \<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>2"
 and "unify ((Var x, t) # U) = Some \<sigma>"
 and "unifiess \<tau> ((Var x, t) # U)"
 shows "\<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>"
@@ -677,13 +697,23 @@ proof (cases "x \<in> fv t")
     by (metis assms(2) assms(3) assms(4) list.discI list.sel(3) option.discI unifiess.simps unify.simps(2))
 next
   case False
+  obtain \<sigma>2 where "unify (Var(x := t) · U) = Some \<sigma>2"
+    using False assms(3) by fastforce
+  also have "\<sigma> = \<sigma>2 \<circ>s (Var(x := t))"
+    using False assms(3) calculation by auto
   have "\<tau> · (Var x) = \<tau> · t"
     by (metis assms(4) list.discI list.sel(1) prod.sel(1) prod.sel(2) unifies.simps unifiess.simps)
   have "\<forall>(u,w)\<in>(set U). \<tau> · u = \<tau> · w"
     by (metis (mono_tags, lifting) alternative_definition_unifiess assms(4) case_prodI2 insert_iff list.set(2) prod.sel(1) prod.sel(2) unifies.simps)
   have "unifiess \<tau> (Var(x := t) · U)"
-    sorry
-  then show ?thesis sorry
+    by (metis False \<open>\<tau> · Var x = \<tau> · t\<close> assms(4) list.discI list.sel(3) unifies_equal_sapply unifies_fv_same unifies_sapply_eq_sys unifiess.simps)
+  obtain \<rho> where "\<tau> = \<rho> \<circ>s \<sigma>2"
+    using False \<open>unifiess \<tau> (Var(x := t) · U)\<close> assms(1) calculation by auto
+  moreover have "sapply (\<tau> \<circ>s (Var(x := t))) = sapply \<tau>"
+    by (meson False \<open>\<tau> · Var x = \<tau> · t\<close> unifies_fv_same)
+  moreover have "\<tau> = \<rho> \<circ>s \<sigma>" by (metis \<open>sapply (\<tau> \<circ>s Var(x := t)) = (·) \<tau>\<close> \<open>\<sigma> = \<sigma>2 \<circ>s Var(x := t)\<close> calculation(2) sapply_equal scomp_assoc)
+  then show ?thesis
+    by blast
 qed
 
 lemma useful_1:
@@ -911,12 +941,6 @@ proof -
   then show ?thesis
     using calculation(2) le_less_trans by blast
 qed
-
-lemma unifies_equal_sapply:
-  assumes "unifiess \<sigma> U"
-  and "sapply \<sigma> = sapply \<tau>"
-shows "unifiess \<tau> U"
-  by (metis alternative_definition_unifiess assms(1) assms(2) unifies.simps)
 
 lemma lemma2:
   assumes "\<exists>\<tau>. unifiess \<tau> U"
