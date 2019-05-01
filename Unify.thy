@@ -761,7 +761,31 @@ then show ?case
   by (meson case_mgu_fun)
 qed
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 (* (c). Formalize theorem 3 *)
+
+
 
 fun sum_liste :: "nat list \<Rightarrow> nat" where
   "sum_liste [] = 0"
@@ -836,7 +860,11 @@ next
   then show ?case
   proof (cases "xa = a")
     case True
-    then show ?thesis sorry
+    have "size_term (sapply \<tau> (Fun f (xa # ll))) =
+          size_term ((sapply \<tau>) xa) + (size_term (sapply \<tau> (Fun f ll)))"
+      by (simp add: fold_plus_sum_list_rev)
+    then show ?thesis
+      by (simp add: True fold_plus_sum_list_rev)
   next
     case False
     have "xa \<in> (set ll)" using Cons.prems False by auto
@@ -850,7 +878,6 @@ next
       using \<open>1 + Unify.size_term (\<tau> · xa) \<le> Unify.size_term (\<tau> · Fun f ll)\<close> by auto
   qed
 qed
-
 
 lemma size_term_subterm:
   assumes "x \<in> fv t"
@@ -867,6 +894,7 @@ proof -
     by (metis (no_types, lifting) \<open>xa \<in> set l \<and> x \<in> fv xa\<close> calculation(1) le_less_trans lessI linorder_neqE_nat order.asym plus_1_eq_Suc size_term_subset)
   then show ?thesis
     using calculation(2) le_less_trans by blast
+qed
 
 lemma lemma2:
   assumes "\<exists>\<tau>. unifiess \<tau> U"
@@ -921,6 +949,18 @@ lemma completeness:
   assumes "\<exists>\<tau>. unifiess \<tau> U"
   shows "\<exists>\<sigma>. unify U = Some \<sigma> \<and> unifiess \<sigma> U"
   using assms lemma2 soundness1 by fastforce
+
+
+
+
+
+
+
+
+
+
+
+
 
 (* (d). Lemma 3 *)
 
@@ -987,6 +1027,21 @@ next
   then show ?case
     by (metis option.discI unify.simps(4))
 qed
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 (*
 --------------------------------------------------
