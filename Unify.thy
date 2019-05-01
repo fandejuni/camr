@@ -1057,6 +1057,59 @@ lemma simple_fv_apply:
   using fold_union_basic apply fastforce+
   done
 
+lemma simple_fold_map_first_elem:
+  "fold (\<union>) (map f (t # q)) {} = (f t) \<union> fold (\<union>) (map f q) {}"
+  by (metis Sup_set_fold UN_insert list.simps(15) set_map)
+
+lemma fv_fun_simple:
+  "fv_eq (Fun f (map fst U), Fun g (map snd U)) = fv_eq_system U"
+proof (induction U)
+  case Nil
+  have "fv_eq (Fun f (map fst []), Fun g (map snd [])) = fv_eq (Fun f [], Fun g [])" by auto
+  also have "... = (fold (\<union>) (map fv []) {}) \<union> (fold (\<union>) (map fv []) {})" by simp
+  have "(fold (\<union>) (map fv []) {}) = {}" by simp
+  have "fv_eq_system [] = {}" by auto
+  then show ?case by simp
+next
+  case (Cons a U)
+  have "fv_eq (Fun f ((fst a) # (map fst U)), Fun g ((snd a) # (map snd U))) =
+  (fold (\<union>) (map fv ((fst a) # (map fst U))) {}) \<union> (fold (\<union>) (map fv ((snd a) # (map snd U))) {})" by auto
+  also have "... = (fv (fst a)) \<union> (fold (\<union>) (map fv (map fst U)) {}) \<union> (fv (snd a)) \<union> (fold (\<union>) (map fv (map snd U)) {})"
+    by (metis (no_types, lifting) simple_fold_map_first_elem sup_assoc)
+  also have "... = (fv_eq a) \<union> (fold (\<union>) (map fv (map fst U)) {}) \<union> (fold (\<union>) (map fv (map snd U)) {})" by auto
+  have "(fold (\<union>) (map fv (map fst U)) {}) \<union> (fold (\<union>) (map fv (map snd U)) {}) = fv_eq (Fun f (map fst U), Fun g (map snd U))" by simp
+  have "fv_eq (Fun f (map fst U), Fun g (map snd U)) = fv_eq_system U" using Cons.IH by blast
+  then show ?case
+    by (metis \<open>fold (\<union>) (map fv (map fst U)) {} \<union> fold (\<union>) (map fv (map snd U)) {} = fv_eq (Fun f (map fst U), Fun g (map snd U))\<close> \<open>fv (fst a) \<union> fold (\<union>) (map fv (map fst U)) {} \<union> fv (snd a) \<union> fold (\<union>) (map fv (map snd U)) {} = fv_eq a \<union> fold (\<union>) (map fv (map fst U)) {} \<union> fold (\<union>) (map fv (map snd U)) {}\<close> calculation fv_eq_system.elims list.simps(9) simple_fold_map_first_elem sup_assoc)
+qed
+
+lemma fv_fun_simple_alternative:
+  assumes "length u = length v"
+  shows "fv_eq (Fun f u, Fun g v) = fv_eq_system (zip u v)"
+  by (metis assms fv_fun_simple map_fst_zip map_snd_zip)
+
+lemma fv_union:
+  "(fv_eq_system U) \<union> (fv_eq_system V) = fv_eq_system (U @ V)"
+proof (induction U)
+  case Nil
+  then show ?case by auto
+next
+  case (Cons a U)
+  then show ?case
+    by (metis (no_types, lifting) append_Cons fv_eq_system.elims inf_sup_aci(5) simple_fold_map_first_elem sup_left_commute)
+qed
+
+lemma fv_eq_fun_lists:
+  assumes "length u = length v"
+  shows "fv_eq_system (zip u v @ U) = fv_eq_system ((Fun f u, Fun g v) # U)"
+proof -
+  have "fv_eq_system ((Fun f u, Fun g v) # U) = (fv_eq (Fun f u, Fun g v)) \<union> (fv_eq_system U)"
+    by (metis (no_types, lifting) Sup_set_fold UN_insert fv_eq_system.elims list.simps(15) set_map)
+  have "fv_eq (Fun f u, Fun g v) = fv_eq_system (zip u v)" using assms fv_fun_simple_alternative by auto
+  also have "fv_eq_system (zip u v) \<union> (fv_eq_system U) = fv_eq_system (zip u v @ U)" by (meson fv_union)
+  then show ?thesis
+    using \<open>fv_eq_system ((Fun f u, Fun g v) # U) = fv_eq (Fun f u, Fun g v) \<union> fv_eq_system U\<close> calculation by blast
+qed
 
 lemma lemma_3_i_iii:
   "unify U = Some \<sigma> \<Longrightarrow> fv_eq_system (\<sigma> · U) \<subseteq> fv_eq_system U \<and> sdom \<sigma> \<subseteq> fv_eq_system U \<and> svran \<sigma> \<subseteq> fv_eq_system U"
@@ -1119,10 +1172,23 @@ next
   qed
 next
   case (3 v va y U)
-  then show ?case sorry
+  then show ?case by (simp add: inf_sup_aci(5) unify.simps(3))
 next
   case (4 f u g v U)
-  then show ?case sorry
+  have "f = g \<and> length u = length v" using "4.prems" option.discI by fastforce
+  have "unify (zip u v @ U) = Some \<sigma>" using "4.prems" \<open>f = g \<and> length u = length v\<close> by auto
+  obtain "fv_eq_system (\<sigma> · (zip u v @ U)) \<subseteq> fv_eq_system (zip u v @ U)"
+    and "sdom \<sigma> \<subseteq> fv_eq_system (zip u v @ U)"
+    and "svran \<sigma> \<subseteq> fv_eq_system (zip u v @ U)"
+    using "4.IH" \<open>f = g \<and> length u = length v\<close> \<open>unify (zip u v @ U) = Some \<sigma>\<close> by blast
+  
+  have "svran \<sigma> \<subseteq> fv_eq_system ((Fun f u, Fun g v) # U)"
+    using \<open>f = g \<and> length u = length v\<close> \<open>svran \<sigma> \<subseteq> fv_eq_system (zip u v @ U)\<close> fv_eq_fun_lists by fastforce
+  moreover have "sdom \<sigma> \<subseteq> fv_eq_system ((Fun f u, Fun g v) # U)"
+    using \<open>f = g \<and> length u = length v\<close> \<open>sdom \<sigma> \<subseteq> fv_eq_system (zip u v @ U)\<close> fv_eq_fun_lists by fastforce
+  moreover have "fv_eq_system (\<sigma> · ((Fun f u, Fun g v) # U)) \<subseteq> fv_eq_system ((Fun f u, Fun g v) # U)"
+    by (metis \<open>f = g \<and> length u = length v\<close> \<open>fv_eq_system (\<sigma> · (zip u v @ U)) \<subseteq> fv_eq_system (zip u v @ U)\<close> fv_eq_fun_lists fv_sapply_eq_system)
+  then show ?case using calculation(1) calculation(2) by blast
 qed
 
 lemma lemma_3_iv:
