@@ -1018,24 +1018,108 @@ theorem completeness:
 
 (* (d). Lemma 3 *)
 
+lemma simple_fv_eq_system_double_var:
+  "fv_eq_system ((Var x, Var y) # U) = (fv_eq_system U) \<union> {x, y}" (is "?A = ?B")
+proof -
+  have "?A \<subseteq> ?B"
+  proof (rule subsetI)
+    fix xa assume "xa \<in> ?A" then show "xa \<in> ?B"
+    proof (cases "xa \<in> fv_eq_system U")
+      case True
+      then show ?thesis by simp
+    next
+      case False
+      have "xa = x \<or> xa = y"
+        by (metis (no_types, lifting) False Sup_set_fold UN_insert UnE UnI2 \<open>xa \<in> fv_eq_system ((Var x, Var y) # U)\<close> fold_union_basic fv.simps(1) fv_eq.elims fv_eq_system.elims insert_iff list.simps(15) prod.sel(1) prod.sel(2) set_map)
+      then show ?thesis by blast
+    qed
+  qed
+  moreover have "?B \<subseteq> ?A"
+  proof (rule subsetI)
+    fix xa assume "xa \<in> ?B" then show "xa \<in> ?A"
+    proof (cases "xa \<in> {x, y}")
+      case True
+      then show ?thesis
+        by (metis (no_types, lifting) Sup_set_fold UN_insert \<open>xa \<in> fv_eq_system U \<union> {x, y}\<close> fv.simps(1) fv_eq.elims fv_eq_system.elims inf_sup_aci(5) insert_is_Un list.simps(15) prod.sel(1) prod.sel(2) set_map)
+    next
+      case False
+      then show ?thesis
+        by (metis (no_types, lifting) Sup_set_fold UN_insert \<open>xa \<in> fv_eq_system U \<union> {x, y}\<close> fv.simps(1) fv_eq.elims fv_eq_system.elims inf_sup_aci(5) insert_is_Un list.simps(15) prod.sel(1) prod.sel(2) set_map)
+    qed
+  qed
+  then show ?thesis using calculation by blast
+qed
+
+lemma simple_fv_apply:
+  "fv_eq_system (\<sigma> · ((Var x, Var y) # U)) = fv (\<sigma> x) \<union> fv (\<sigma> y) \<union> fv_eq_system (\<sigma> · U)"
+  apply (auto simp add: SUP_union simple_fv_eq_system_double_var sup_assoc sup_left_commute)
+     apply (metis UnE fold_union_basic)
+  using fold_union_basic apply fastforce+
+  done
+
+
 lemma lemma_3_i_iii:
-  assumes "unify U = Some \<sigma>"
-  shows "fv_eq_system (\<sigma> · U) \<subseteq> fv_eq_system U \<and> sdom \<sigma> \<subseteq> fv_eq_system U \<and> svran \<sigma> \<subseteq> fv_eq_system U"
-  using assms
-proof (induction U rule: unify.induct)
+  "unify U = Some \<sigma> \<Longrightarrow> fv_eq_system (\<sigma> · U) \<subseteq> fv_eq_system U \<and> sdom \<sigma> \<subseteq> fv_eq_system U \<and> svran \<sigma> \<subseteq> fv_eq_system U"
+proof (induction U arbitrary: \<sigma> rule: unify.induct)
   case 1
   then show ?case
     by simp
 next
   case (2 x t U)
-  then show ?case sorry
+  then show ?case
+  proof (cases "x \<in> fv t")
+    case True
+    have "Var x = t"
+    proof (rule ccontr)
+      assume "\<not> (Var x = t)"
+      show "False"
+      proof -
+        show ?thesis using "2"(3) True \<open>Var x \<noteq> t\<close> by auto
+      qed
+    qed
+
+  (* SIMP CASE *)
+
+    have "unify U = unify ((Var x, t) # U)" using \<open>Var x = t\<close> by auto
+    have "fv_eq_system (\<sigma> · U) \<subseteq> fv_eq_system U \<and> sdom \<sigma> \<subseteq> fv_eq_system U \<and> svran \<sigma> \<subseteq> fv_eq_system U"
+      using "2"(2) "2.prems" True \<open>Var x = t\<close> \<open>unify U = unify ((Var x, t) # U)\<close> by auto
+    also have "fv_eq_system ((Var x, t) # U) = (fv_eq_system U) \<union> {x}"
+      by (metis \<open>Var x = t\<close> insert_absorb2 simple_fv_eq_system_double_var)
+    moreover have "fv_eq_system (\<sigma> · ((Var x, t) # U)) = fv (\<sigma> x) \<union> fv_eq_system (\<sigma> · U)"
+      using \<open>Var x = t\<close> simple_fv_apply by fastforce
+    have "fv (\<sigma> x) \<subseteq> {x} \<union> fv_eq_system ((Var x, t) # U)"
+    proof -
+      have "fv (\<sigma> x) \<subseteq> (fv (Var x) - sdom \<sigma>) \<union> svran \<sigma>"
+        by (metis fv.simps(1) fv_sapply_sdom_svran sapply.simps(2) subsetI)
+      have "(fv (Var x) - sdom \<sigma>) \<union> svran \<sigma> \<subseteq> (fv (Var x) - sdom \<sigma>) \<union> fv_eq_system U"
+        using calculation(1) by fastforce
+      moreover have "(fv (Var x) - sdom \<sigma>) \<subseteq> {x} \<union> fv_eq ((Var x, t))" by auto
+      also have "fv_eq ((Var x, t)) \<subseteq> fv_eq_system ((Var x, t) # U)"
+        using \<open>Var x = t\<close> \<open>fv_eq_system ((Var x, t) # U) = fv_eq_system U \<union> {x}\<close> fv_eq.elims by auto
+      moreover have "fv_eq_system U \<subseteq> fv_eq_system ((Var x, t) # U)"
+        using \<open>fv_eq_system ((Var x, t) # U) = fv_eq_system U \<union> {x}\<close> by auto
+      then show ?thesis
+        using \<open>Var x = t\<close> \<open>fv (\<sigma> x) \<subseteq> fv (Var x) - sdom \<sigma> \<union> svran \<sigma>\<close> calculation(1) by fastforce
+    qed
+    moreover have "sdom \<sigma> \<subseteq> fv_eq_system ((Var x, t) # U)"
+      using calculation(1) calculation(2) by blast
+    moreover have "svran \<sigma> \<subseteq> fv_eq_system ((Var x, t) # U)"
+      using calculation(1) calculation(2) by blast
+    then show ?thesis
+      using \<open>fv_eq_system (\<sigma> · ((Var x, t) # U)) = fv (\<sigma> x) \<union> fv_eq_system (\<sigma> · U)\<close> calculation(1) calculation(2) calculation(3) by auto
+  next
+    case False
+(* CASE UNIFY *)
+    obtain \<sigma>2 where "unify (Var(x := t) · ((Var x, t) # U)) = Some \<sigma>2"
+      by (metis (no_types, hide_lams) "2.prems" False completeness lifted_comp.elims option.discI soundness1 unifies_sapply_eq_sys unify.simps(2))
+    have "\<sigma> = \<sigma>2 \<circ>s (Var(x := t))" sorry
+    have "fv_eq_system (Var(x := t) · U) \<subseteq> fv(t) \<union> fv_eq_system(U)"
+      by (smt UN_iff UnI1 UnI2 fun_upd_other fun_upd_same fv.simps(1) fv_sapply_eq_system singleton_iff subsetI)
+    then show ?thesis sorry
+  qed
 next
   case (3 v va y U)
-  have "fv_eq_system (\<sigma> · ((Fun v va, Var y) # U)) \<subseteq> fv_eq_system ((Fun v va, Var y) # U)" sorry
-  moreover have "sdom \<sigma> \<subseteq> fv_eq_system ((Fun v va, Var y) # U)" sorry
-  moreover have "svran \<sigma> \<subseteq> fv_eq_system ((Fun v va, Var y) # U)" sorry
-  then show ?case
-    using calculation(1) calculation(2) by blast
+  then show ?case sorry
 next
   case (4 f u g v U)
   then show ?case sorry
