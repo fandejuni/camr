@@ -630,7 +630,7 @@ proof -
     by (simp add: \<open>unifiess \<sigma> U\<close> unifiess_rec)
 qed
 
-lemma
+lemma soundness1:
   assumes "unify U = Some \<sigma>"
   shows "unifiess \<sigma> U"
   using assms
@@ -739,7 +739,7 @@ proof -
     using assms(1) calculation(1) calculation(2) calculation(3) by blast
 qed
 
-lemma
+lemma soundness2:
   assumes "unify U = Some \<sigma>"
   and "unifiess \<tau> U"
 shows "\<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>"
@@ -761,19 +761,232 @@ then show ?case
   by (meson case_mgu_fun)
 qed
 
-(*
-lemma
-  assumes "unify U = Some \<sigma>"
+(* (c). Formalize theorem 3 *)
 
-  shows "unifiess \<sigma> U"
+fun sum_liste :: "nat list \<Rightarrow> nat" where
+  "sum_liste [] = 0"
+| "sum_liste (t # q) = t + sum_liste q"
+
+lemma sum_liste_fold:
+  "fold (+) (map f l) 0 = sum_liste (map f l)"
+proof (induction l)
+  case Nil
+  then show ?case
+    by simp
+next
+  case (Cons a l)
+  then show ?case
+    by (simp add: fold_plus_sum_list_rev)
+qed
+
+lemma increasing_sum_liste:
+ "xa \<in> (set x2) \<Longrightarrow> sum_liste (map size_term (map (sapply \<tau>) x2))  \<ge>
+sum_liste (map size_term (map (sapply \<tau>) [xa]))"
+proof (induction x2)
+  case Nil
+  then show ?case by auto
+next
+  case (Cons a x2)
+  then show ?case using list.simps(8) set_ConsD by auto
+qed
+
+lemma size_term_fun:
+  assumes "xa \<in> (set x2)"
+  shows "size_term (sapply \<tau> xa) \<le> size_term (sapply \<tau> (Fun x1a x2))"
   using assms
-  apply (induction arbitrary: \<sigma> rule: unify.induct)
-     apply (simp add: unifiess_empty)
-    apply (meson case_unify)
-  apply (metis list.discI list.sel(1) list.sel(3) prod.sel(1) prod.sel(2) unifies.simps unifiess.simps unify.simps(3))
-  by (simp add: case_fun)
+proof -
+  have "sapply \<tau> (Fun x1a x2) = Fun x1a (map (sapply \<tau>) x2)" by simp
+  also have "size_term (Fun x1a (map (sapply \<tau>) x2)) \<ge>
+            fold (+) (map size_term (map (sapply \<tau>) x2)) 0"
+    by (meson less_imp_le_nat size_term_sound)
+  also have "fold (+) (map size_term (map (sapply \<tau>) x2)) 0 = sum_liste (map size_term (map (sapply \<tau>) x2))"
+    by (simp add: sum_liste_fold)
+  also have "... \<ge> sum_liste (map size_term (map (sapply \<tau>) [xa]))"
+    using assms increasing_sum_liste by auto
+  have "sum_liste (map size_term (map (sapply \<tau>) [xa])) = size_term (sapply \<tau> xa)" by simp
+  then show ?thesis
+    using \<open>sum_liste (map Unify.size_term (map ((·) \<tau>) [xa])) \<le> sum_liste (map Unify.size_term (map ((·) \<tau>) x2))\<close> calculation by linarith
+qed
 
-*)
+lemma size_term_subterm_prelim:
+  "x \<in> fv t \<Longrightarrow> size_term (sapply \<tau> (Var x)) \<le> size_term (sapply \<tau> t)"
+proof (induction t)
+  case (Var y)
+  then show ?case
+    by simp
+next
+  case (Fun x1a x2)
+  obtain xa where "xa \<in> (set x2)" and "x \<in> fv xa"
+    by (metis Fun.prems UN_E fv_fun)
+  also have "size_term (sapply \<tau> (Var x)) \<le> size_term (sapply \<tau> xa)"
+    using Fun.IH calculation by auto
+  have "size_term (sapply \<tau> xa) \<le> size_term (sapply \<tau> (Fun x1a x2))"
+    using calculation(1) size_term_fun by auto
+  then show ?case
+    using \<open>Unify.size_term (\<tau> · Var x) \<le> Unify.size_term (\<tau> · xa)\<close> dual_order.trans by blast
+qed
+
+lemma size_term_subset:
+  "xa \<in> (set l) \<Longrightarrow> size_term (sapply \<tau> (Fun f l)) \<ge> 1 + size_term (sapply \<tau> xa)"
+proof (induction l)
+  case Nil
+  then show ?case by auto
+next
+  case (Cons a ll)
+  then show ?case
+  proof (cases "xa = a")
+    case True
+    then show ?thesis sorry
+  next
+    case False
+    have "xa \<in> (set ll)" using Cons.prems False by auto
+    also have "size_term (sapply \<tau> (Fun f ll)) \<ge> 1 + size_term (sapply \<tau> xa)"
+      using Cons.IH calculation by auto
+    have "size_term (\<tau> · Fun f (a # ll)) = size_term (Fun f (map (sapply \<tau>) (a # ll)))"
+      by simp
+    have "... = size_term ((sapply \<tau>) a) + size_term (Fun f (map (sapply \<tau>) ll))"
+      by (simp add: fold_plus_sum_list_rev)
+    then show ?thesis
+      using \<open>1 + Unify.size_term (\<tau> · xa) \<le> Unify.size_term (\<tau> · Fun f ll)\<close> by auto
+  qed
+qed
+
+
+lemma size_term_subterm:
+  assumes "x \<in> fv t"
+  and "\<not> (Var x = t)"
+shows "size_term (sapply \<tau> (Var x)) < size_term (sapply \<tau> t)"
+proof -
+  obtain f and l where "t = Fun f l"
+    by (metis (full_types) Unify.term.simps(17) assms(1) assms(2) fv.elims term.set_cases(2))
+  also obtain xa where "(xa \<in> (set l)) \<and> x \<in> fv xa"
+    by (metis UN_E assms(1) calculation fv_fun)
+  have "size_term (sapply \<tau> (Var x)) \<le> size_term (sapply \<tau> xa)"
+    by (meson \<open>xa \<in> set l \<and> x \<in> fv xa\<close> size_term_subterm_prelim)
+  moreover have "size_term (sapply \<tau> t) > size_term (sapply \<tau> xa)"
+    by (metis (no_types, lifting) \<open>xa \<in> set l \<and> x \<in> fv xa\<close> calculation(1) le_less_trans lessI linorder_neqE_nat order.asym plus_1_eq_Suc size_term_subset)
+  then show ?thesis
+    using calculation(2) le_less_trans by blast
+
+lemma lemma2:
+  assumes "\<exists>\<tau>. unifiess \<tau> U"
+  shows "\<not>(unify U = None)"
+  using assms
+proof (induction rule: unify.induct)
+case 1
+  then show ?case by simp
+next
+  case (2 x t U)
+  then show ?case
+  proof (cases "x \<in> fv t")
+    case True
+    have "Var x = t"
+    proof (rule ccontr)
+      assume "\<not> (Var x = t)"
+      show "False"
+      proof -
+        obtain \<tau> where "unifiess \<tau> ((Var x, t) # U)"
+          using "2.prems" by blast
+        also have "sapply \<tau> (Var x) = sapply \<tau> t"
+          by (metis calculation list.discI list.sel(1) prod.sel(1) prod.sel(2) unifies.simps unifiess.simps)
+        have "size_term (sapply \<tau> (Var x)) = size_term (sapply \<tau> t)"
+          using \<open>\<tau> · Var x = \<tau> · t\<close> by auto
+        have "size_term (sapply \<tau> (Var x)) < size_term (sapply \<tau> t)"
+          by (meson True \<open>Var x \<noteq> t\<close> size_term_subterm)
+        then show ?thesis
+          using \<open>Unify.size_term (\<tau> · Var x) = Unify.size_term (\<tau> · t)\<close> nat_neq_iff by blast
+      qed
+    qed
+    then show ?thesis
+      by (metis "2.IH"(2) "2.prems" fv.simps(1) insert_iff list.discI list.sel(3) unifiess.simps unify.simps(2))
+  next
+    case False
+    (* UNIFY case *)
+    obtain \<tau> where "unifiess \<tau> ((Var x, t) # U)"
+      using "2.prems" by blast
+    also have "sapply \<tau> (Var x) = sapply \<tau> t"
+      by (metis calculation list.discI list.sel(1) prod.sel(1) prod.sel(2) unifies.simps unifiess.simps)
+    then show ?thesis sorry
+  qed
+next
+case (3 v va y U)
+  then show ?case
+  by (metis list.discI list.sel(1) list.sel(3) prod.sel(1) prod.sel(2) unifies.simps unifiess.simps unify.simps(3))
+next
+  case (4 f u g v U)
+  then show ?case sorry
+qed
+
+lemma completeness:
+  assumes "\<exists>\<tau>. unifiess \<tau> U"
+  shows "\<exists>\<sigma>. unify U = Some \<sigma> \<and> unifiess \<sigma> U"
+  using assms lemma2 soundness1 by fastforce
+
+(* (d). Lemma 3 *)
+
+lemma lemma_3_i_iii:
+  assumes "unify U = Some \<sigma>"
+  shows "fv_eq_system (\<sigma> · U) \<subseteq> fv_eq_system U \<and> sdom \<sigma> \<subseteq> fv_eq_system U \<and> svran \<sigma> \<subseteq> fv_eq_system U"
+  using assms
+proof (induction U rule: unify.induct)
+  case 1
+  then show ?case
+    by simp
+next
+  case (2 x t U)
+  then show ?case sorry
+next
+  case (3 v va y U)
+  have "fv_eq_system (\<sigma> · ((Fun v va, Var y) # U)) \<subseteq> fv_eq_system ((Fun v va, Var y) # U)" sorry
+  moreover have "sdom \<sigma> \<subseteq> fv_eq_system ((Fun v va, Var y) # U)" sorry
+  moreover have "svran \<sigma> \<subseteq> fv_eq_system ((Fun v va, Var y) # U)" sorry
+  then show ?case
+    using calculation(1) calculation(2) by blast
+next
+  case (4 f u g v U)
+  then show ?case sorry
+qed
+
+lemma lemma_3_iv:
+  assumes "unify U = Some \<sigma>"
+  shows "sdom \<sigma> \<inter> svran \<sigma> = {}"
+  using assms
+proof (induction rule: unify.induct)
+case 1
+  then show ?case 
+    by simp
+next
+  case (2 x t U)
+  then show ?case
+  proof (cases "x \<in> fv t")
+    case True
+    then show ?thesis
+      by (metis "2.IH"(2) "2.prems" option.discI unify.simps(2))
+  next
+    case False
+    have "\<not> (unify ((Var(x := t)) · ((Var x, t) # U)) = None)"
+    proof (rule ccontr)
+      assume "\<not> (\<not> (unify ((Var(x := t)) · ((Var x, t) # U)) = None))"
+      show "False"
+      proof -
+        have "unify ((Var(x := t)) · ((Var x, t) # U)) = None"
+          using \<open>\<not> unify (Var(x := t) · ((Var x, t) # U)) \<noteq> None\<close> by auto
+        also have "unify ((Var x, t) # U) = None" sorry
+        then show ?thesis
+          using "2.prems" by auto
+      qed
+    qed
+    then show ?thesis sorry
+  qed
+next
+case (3 v va y U)
+  then show ?case
+    by simp
+next
+  case (4 f u g v U)
+  then show ?case
+    by (metis option.discI unify.simps(4))
+qed
 
 (*
 --------------------------------------------------
