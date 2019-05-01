@@ -649,6 +649,22 @@ Hint: Split the proof into two parts and prove them separately by computational 
 
 *)
 
+lemma unifies_fv_same:
+  assumes "\<tau> · Var x = \<tau> · t"
+  and "x \<notin> fv t"
+  shows "sapply (\<tau> \<circ>s (Var(x := t))) = sapply \<tau>"
+proof (rule ext)
+  show "sapply (\<tau> \<circ>s Var(x := t)) xa = sapply \<tau> xa" for xa
+  proof (induction xa rule: term.induct)
+    case (Var y)
+    then show ?case
+      using assms(1) by auto
+  next
+    case (Fun x1a x2)
+    then show ?case by auto
+  qed
+qed
+
 lemma case_mgu_unify:
   assumes "\<And>\<sigma> \<tau>. \<lbrakk>x \<notin> fv t; unify (Var(x := t) · U) = Some \<sigma>; unifiess \<tau> (Var(x := t) · U)\<rbrakk> \<Longrightarrow> \<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>"
 and "\<And>\<sigma> \<tau>. \<lbrakk>\<not> x \<notin> fv t; Var x = t; unify U = Some \<sigma>; unifiess \<tau> U\<rbrakk> \<Longrightarrow> \<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>"
@@ -896,6 +912,12 @@ proof -
     using calculation(2) le_less_trans by blast
 qed
 
+lemma unifies_equal_sapply:
+  assumes "unifiess \<sigma> U"
+  and "sapply \<sigma> = sapply \<tau>"
+shows "unifiess \<tau> U"
+  by (metis alternative_definition_unifiess assms(1) assms(2) unifies.simps)
+
 lemma lemma2:
   assumes "\<exists>\<tau>. unifiess \<tau> U"
   shows "\<not>(unify U = None)"
@@ -934,7 +956,12 @@ next
       using "2.prems" by blast
     also have "sapply \<tau> (Var x) = sapply \<tau> t"
       by (metis calculation list.discI list.sel(1) prod.sel(1) prod.sel(2) unifies.simps unifiess.simps)
-    then show ?thesis sorry
+    have "sapply (\<tau> \<circ>s (Var(x := t))) = sapply \<tau>"
+      by (meson False \<open>\<tau> · Var x = \<tau> · t\<close> unifies_fv_same)
+    have "unifiess (\<tau> \<circ>s (Var(x := t))) U"
+      by (metis \<open>sapply (\<tau> \<circ>s Var(x := t)) = sapply \<tau>\<close> calculation list.distinct(1) list.sel(3) unifies_equal_sapply unifiess.cases)
+    then show ?thesis
+      using "2.IH"(1) False unifies_sapply_eq_sys by fastforce
   qed
 next
 case (3 v va y U)
@@ -942,10 +969,13 @@ case (3 v va y U)
   by (metis list.discI list.sel(1) list.sel(3) prod.sel(1) prod.sel(2) unifies.simps unifiess.simps unify.simps(3))
 next
   case (4 f u g v U)
-  then show ?case sorry
+  obtain "f = g" and "length u = length v"
+    by (metis (no_types, lifting) "4.prems" length_map list.discI list.sel(1) prod.sel(1) prod.sel(2) sapply.simps(1) term.inject(2) unifies.simps unifiess.simps)
+  then show ?case
+    by (metis (no_types, lifting) "4.IH" "4.prems" list.discI list.sel(1) list.sel(3) map_fst_zip map_snd_zip separate_unifiess unifies_fun_args unifiess.simps unify.simps(4))
 qed
 
-lemma completeness:
+theorem completeness:
   assumes "\<exists>\<tau>. unifiess \<tau> U"
   shows "\<exists>\<sigma>. unify U = Some \<sigma> \<and> unifiess \<sigma> U"
   using assms lemma2 soundness1 by fastforce
