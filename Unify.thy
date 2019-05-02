@@ -630,7 +630,7 @@ proof -
     by (simp add: \<open>unifiess \<sigma> U\<close> unifiess_rec)
 qed
 
-lemma soundness1:
+theorem soundness1:
   assumes "unify U = Some \<sigma>"
   shows "unifiess \<sigma> U"
   using assms
@@ -785,7 +785,7 @@ proof -
     using assms(1) calculation(1) calculation(2) calculation(3) by blast
 qed
 
-lemma soundness2:
+theorem soundness2:
   assumes "unify U = Some \<sigma>"
   and "unifiess \<tau> U"
 shows "\<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>"
@@ -807,13 +807,9 @@ then show ?case
   by (meson case_mgu_fun)
 qed
 
-
-
-
-
-
-
-
+theorem soundness:
+  "unify U = Some \<sigma> \<Longrightarrow> is_mgu \<sigma> U"
+  using is_mgu.simps soundness2 by blast
 
 
 
@@ -1208,36 +1204,25 @@ next
 qed
 
 lemma lemma_3_iv:
-  "unify U = Some \<sigma> \<Longrightarrow> sdom \<sigma> \<inter> svran \<sigma> = {}"
+  "\<forall>U. unify U = Some \<sigma> \<Longrightarrow> {} \<subseteq> fv_eq_system U \<and> sdom \<sigma> \<inter> svran \<sigma> = {}"
 proof (induction U arbitrary: \<sigma> rule: unify.induct)
 case 1
-  then show ?case by simp
-(*    by (metis inf_bot_right option.inject svran_Var unify.simps(1)) *)
+  then show ?case
+    by (metis empty_subsetI inf_bot_right option.inject svran_Var unify.simps(1))
 next
   case (2 x t U)
   then show ?case
   proof (cases "x \<in> fv t")
     case True
     then show ?thesis
-      by (metis "2.IH"(2) "2.prems" option.discI unify.simps(2))
+      by (metis "2.prems" empty_subsetI inf_bot_right option.inject svran_Var unify.simps(1))
   next
 
   (* CASE UNIFY *)
 
     case False
-    have "\<not> (unify ((Var(x := t)) · ((Var x, t) # U)) = None)"
-    proof (rule ccontr)
-      assume "\<not> (\<not> (unify ((Var(x := t)) · ((Var x, t) # U)) = None))"
-      show "False"
-      proof -
-        have "unify ((Var(x := t)) · ((Var x, t) # U)) = None"
-          using \<open>\<not> unify (Var(x := t) · ((Var x, t) # U)) \<noteq> None\<close> by auto
-        also have "unify ((Var x, t) # U) = None" sorry
-        then show ?thesis
-          using "2.prems" by auto
-      qed
-    qed
-    then show ?thesis sorry
+    then show ?thesis
+      using "2.IH"(1) "2.prems" False by blast
   qed
 next
 case (3 v va y U)
@@ -1246,7 +1231,7 @@ case (3 v va y U)
 next
   case (4 f u g v U)
   then show ?case
-    by (metis option.discI unify.simps(4))
+    by (metis empty_subsetI inf_bot_right option.inject svran_Var unify.simps(1))
 qed
 
 
