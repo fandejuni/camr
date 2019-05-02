@@ -827,8 +827,6 @@ theorem soundness:
 
 (* (c). Formalize theorem 3 *)
 
-
-
 fun sum_liste :: "nat list \<Rightarrow> nat" where
   "sum_liste [] = 0"
 | "sum_liste (t # q) = t + sum_liste q"
@@ -1108,8 +1106,8 @@ proof -
 qed
 
 lemma lemma_3_i_iii:
-  "\<forall>U. unify U = Some \<sigma> \<Longrightarrow> fv_eq_system (\<sigma> · U) \<subseteq> fv_eq_system U \<and> sdom \<sigma> \<subseteq> fv_eq_system U \<and> svran \<sigma> \<subseteq> fv_eq_system U"
-proof (induction U arbitrary: \<sigma> rule: unify.induct)
+  "unify U = Some \<sigma> \<Longrightarrow> fv_eq_system (\<sigma> · U) \<subseteq> fv_eq_system U \<and> sdom \<sigma> \<subseteq> fv_eq_system U \<and> svran \<sigma> \<subseteq> fv_eq_system U"
+proof (induction arbitrary: \<sigma> rule: unify.induct)
   case 1
   then show ?case
     by (metis empty_iff list.simps(8) option.inject sapply_eq_system.elims sdom_Var subsetI svran_Var unify.simps(1))
@@ -1123,8 +1121,7 @@ next
       assume "\<not> (Var x = t)"
       show "False"
       proof -
-        show ?thesis using "2"(3) True \<open>Var x \<noteq> t\<close>
-          by (metis lemma2 unifiess_empty unify.simps(1) unify.simps(2))
+        show ?thesis using "2"(3) True \<open>Var x \<noteq> t\<close> by simp
       qed
     qed
 
@@ -1164,24 +1161,38 @@ next
 
     obtain \<sigma>2 where "unify (Var(x := t) · ((Var x, t) # U)) = Some \<sigma>2"
       by (metis (no_types, hide_lams) "2.prems" False completeness lifted_comp.elims option.discI soundness1 unifies_sapply_eq_sys unify.simps(2))
-    have "\<sigma> = \<sigma>2 \<circ>s (Var(x := t))"
+    have "\<sigma> = \<sigma>2 \<circ>s (Var(x := t))" sorry
+(*
       by (metis "2.prems" False \<open>unify (Var(x := t) · ((Var x, t) # U)) = Some \<sigma>2\<close> lifted_comp.simps(2) option.inject unify.simps(2))
+*)
     have "fv_eq_system (Var(x := t) · U) \<subseteq> fv(t) \<union> fv_eq_system(U)"
-      by (metis "2.prems" False Var_scomp \<open>\<sigma> = \<sigma>2 \<circ>s Var(x := t)\<close> \<open>unify (Var(x := t) · ((Var x, t) # U)) = Some \<sigma>2\<close> fun_upd_same fv.simps(1) option.inject singletonI unify.simps(1))
-    obtain "fv_eq_system (\<sigma> · Var(x := t) · U) \<subseteq> fv_eq_system (Var(x := t) · U) \<and> sdom \<sigma> \<subseteq> fv_eq_system (Var(x := t) · U) \<and> svran \<sigma> \<subseteq> fv_eq_system (Var(x := t) · U)"
+(* TODO *)
+      by (smt UN_iff UnI1 fun_upd_apply fv.simps(1) fv_sapply_eq_system singletonD subsetCE subsetI sup.cobounded2)
+    obtain "fv_eq_system (\<sigma> · Var(x := t) · U) \<subseteq> fv_eq_system (Var(x := t) · U) \<and> sdom \<sigma> \<subseteq> fv_eq_system (Var(x := t) · U) \<and> svran \<sigma> \<subseteq> fv_eq_system (Var(x := t) · U)" sorry
+(*
       using "2.IH"(1) "2.prems" False by blast
-    have "fv_eq_system (\<sigma>2 · (Var(x := t) · U)) \<subseteq> fv(t) \<union> fv_eq_system(U)"
+*)
+    have "fv_eq_system (\<sigma>2 · (Var(x := t) · U)) \<subseteq> fv(t) \<union> fv_eq_system(U)" sorry
+(*
+      by (smt "2.IH"(1) "2.prems" False \<open>\<sigma> = \<sigma>2 \<circ>s Var(x := t)\<close> \<open>fv_eq_system (Var(x := t) · U) \<subseteq> fv t \<union> fv_eq_system U\<close> lifted_comp.elims option.distinct(1) option.inject sapply_scomp_distrib_eq_system sup.absorb_iff2 sup.coboundedI1 unify.simps(2))
       using "2.prems" \<open>\<And>thesis. (fv_eq_system (\<sigma> · Var(x := t) · U) \<subseteq> fv_eq_system (Var(x := t) · U) \<and> sdom \<sigma> \<subseteq> fv_eq_system (Var(x := t) · U) \<and> svran \<sigma> \<subseteq> fv_eq_system (Var(x := t) · U) \<Longrightarrow> thesis) \<Longrightarrow> thesis\<close> \<open>fv_eq_system (Var(x := t) · U) \<subseteq> fv t \<union> fv_eq_system U\<close> \<open>unify (Var(x := t) · ((Var x, t) # U)) = Some \<sigma>2\<close> by auto
-    have "sdom \<sigma>2 \<subseteq> fv t \<union> fv_eq_system U"
+*)
+    have "sdom \<sigma>2 \<subseteq> fv t \<union> fv_eq_system U" sorry
+(*
       using "2.prems" \<open>\<And>thesis. (fv_eq_system (\<sigma> · Var(x := t) · U) \<subseteq> fv_eq_system (Var(x := t) · U) \<and> sdom \<sigma> \<subseteq> fv_eq_system (Var(x := t) · U) \<and> svran \<sigma> \<subseteq> fv_eq_system (Var(x := t) · U) \<Longrightarrow> thesis) \<Longrightarrow> thesis\<close> \<open>fv_eq_system (Var(x := t) · U) \<subseteq> fv t \<union> fv_eq_system U\<close> \<open>unify (Var(x := t) · ((Var x, t) # U)) = Some \<sigma>2\<close> by auto
+*)
     have "fv_eq_system ((Var x, t) # U) = (fv t) \<union> (fv_eq_system U) \<union> {x}"
       by (metis (no_types, lifting) Un_insert_left Un_insert_right fv.simps(1) fv_eq.elims fv_eq_system.elims insert_is_Un prod.sel(1) prod.sel(2) simple_fold_map_first_elem sup_bot.right_neutral)
     have "fv_eq_system (\<sigma> · ((Var x, t) # U)) = fv_eq_system ((\<sigma>2 \<circ>s (Var(x := t))) · ((Var x, t) # U))"
       by (metis \<open>\<sigma> = (\<sigma>2 \<circ>s Var(x := t))\<close>)
-    also have "... = fv (\<sigma>2 · t) \<union> fv_eq_system (\<sigma>2 · (Var(x := t) · U))"
+    also have "... = fv (\<sigma>2 · t) \<union> fv_eq_system (\<sigma>2 · (Var(x := t) · U))" sorry
+  (*
       by (metis "2.prems" False Var_id \<open>\<sigma> = \<sigma>2 \<circ>s Var(x := t)\<close> \<open>unify (Var(x := t) · ((Var x, t) # U)) = Some \<sigma>2\<close> fun_upd_same fv.simps(1) option.inject scomp_sapply singletonI unify.simps(1))
-  then show ?thesis
+*)
+    then show ?thesis sorry
+(*
     by (metis "2.prems" False Var_scomp \<open>\<sigma> = \<sigma>2 \<circ>s Var(x := t)\<close> \<open>unify (Var(x := t) · ((Var x, t) # U)) = Some \<sigma>2\<close> fun_upd_same fv.simps(1) option.inject singletonI unify.simps(1))
+*)
   qed
 next
   case (3 v va y U)
@@ -1204,25 +1215,29 @@ next
 qed
 
 lemma lemma_3_iv:
-  "\<forall>U. unify U = Some \<sigma> \<Longrightarrow> {} \<subseteq> fv_eq_system U \<and> sdom \<sigma> \<inter> svran \<sigma> = {}"
-proof (induction U arbitrary: \<sigma> rule: unify.induct)
+  "unify U = Some \<sigma> \<Longrightarrow> sdom \<sigma> \<inter> svran \<sigma> = {}"
+proof (induction arbitrary: \<sigma> rule: unify.induct)
 case 1
   then show ?case
-    by (metis empty_subsetI inf_bot_right option.inject svran_Var unify.simps(1))
+    by (metis inf_bot_right option.inject svran_Var unify.simps(1))
 next
   case (2 x t U)
   then show ?case
   proof (cases "x \<in> fv t")
     case True
     then show ?thesis
-      by (metis "2.prems" empty_subsetI inf_bot_right option.inject svran_Var unify.simps(1))
+      by (metis "2.IH"(2) "2.prems" option.discI unify.simps(2))
   next
 
   (* CASE UNIFY *)
 
-    case False
-    then show ?thesis
-      using "2.IH"(1) "2.prems" False by blast
+  case False
+    obtain \<sigma>2 where "unify (Var(x := t) · ((Var x, t) # U)) = Some \<sigma>2"
+      by (metis (no_types, hide_lams) "2.prems" False completeness lifted_comp.elims option.discI soundness1 unifies_sapply_eq_sys unify.simps(2))
+    have "\<sigma> = \<sigma>2 \<circ>s (Var(x := t))" sorry
+    have "sdom \<sigma>2 \<inter> svran \<sigma>2 = {}" sorry
+
+    then show ?thesis sorry
   qed
 next
 case (3 v va y U)
@@ -1231,7 +1246,7 @@ case (3 v va y U)
 next
   case (4 f u g v U)
   then show ?case
-    by (metis empty_subsetI inf_bot_right option.inject svran_Var unify.simps(1))
+    by (metis option.discI unify.simps(4))
 qed
 
 
@@ -1269,7 +1284,7 @@ definition wf_eq :: "('f \<Rightarrow> nat) \<Rightarrow> ('f, 'v) equation \<Ri
 
 inductive wf_eqs :: "('f \<Rightarrow> nat) \<Rightarrow> ('f, 'v) equations \<Rightarrow> bool" where
   "wf_eqs ar []"
-| "(wf_eqs ar U) \<and> (wf_equation ar eq) \<Longrightarrow> wf_eqs ar (eq # U)"
+| "(wf_eqs ar U) \<and> (wf_eq ar eq) \<Longrightarrow> wf_eqs ar (eq # U)"
 
 (* 4. (b) *)
 
@@ -1289,10 +1304,97 @@ lemma wf_subst_scomp[simp]:
 "\<lbrakk> wf_subst arity \<sigma>; wf_subst arity \<tau> \<rbrakk> \<Longrightarrow> wf_subst arity (\<sigma> \<circ>s \<tau> )"
   by (simp add: wf_subst_def)
 
+lemma for_all_wf_eqs:
+  "\<forall>(x, y)\<in>(set u). wf_eq ar (x, y) \<Longrightarrow> wf_eqs ar u"
+proof (induction u)
+  case Nil
+  then show ?case using wf_eqs.intros(1) by blast
+next
+  case (Cons a u)
+  then show ?case
+    by (metis case_prodD list.set_intros(1) list.set_intros(2) prod.collapse wf_eqs.intros(2))
+qed
+
+lemma wf_fun_zip:
+  "wf_eq ar (Fun f (map fst u), Fun g (map snd u)) \<Longrightarrow> wf_eqs ar u"
+proof (induction u)
+  case Nil
+  then show ?case by (simp add: wf_eqs.intros(1))
+next
+  case (Cons a u)
+  obtain "wf_term ar (Fun f (map fst (a # u)))" and "wf_term ar (Fun g (map snd (a # u)))"
+    using Cons.prems wf_eq_def by fastforce
+  have "(\<forall>t\<in>(set (map fst (a # u))). wf_term ar t)"
+    by (metis \<open>wf_term ar (Fun f (map fst (a # u)))\<close> term.distinct(1) term.inject(2) wf_term.cases)
+  obtain "wf_term ar (fst a)" and "\<forall>x\<in>(set (map fst u)). wf_term ar x"
+    by (simp add: \<open>(\<forall>t\<in>set (map fst (a # u)). wf_term ar t)\<close>)
+  have "(\<forall>t\<in>(set (map snd (a # u))). wf_term ar t)"
+    by (metis \<open>wf_term ar (Fun g (map snd (a # u)))\<close> term.distinct(1) term.inject(2) wf_term.cases)
+  obtain "wf_term ar (snd a)" and "\<forall>x\<in>(set (map snd u)). wf_term ar x"
+    by (simp add: \<open>(\<forall>t\<in>set (map snd (a # u)). wf_term ar t)\<close>)
+  have "\<forall>(x, y)\<in>(set u). wf_eq ar (x, y)"
+    using \<open>\<forall>x\<in>set (map fst u). wf_term ar x\<close> \<open>\<forall>x\<in>set (map snd u). wf_term ar x\<close> wf_eq_def by fastforce
+  also have "wf_eqs ar u" using calculation for_all_wf_eqs by blast
+  have "wf_eq ar a"
+    by (simp add: \<open>wf_term ar (fst a)\<close> \<open>wf_term ar (snd a)\<close> wf_eq_def)
+  then show ?case by (simp add: \<open>wf_eqs ar u\<close> wf_eqs.intros(2))
+qed
+
+lemma wf_eqs_two_parts:
+  "wf_eqs ar U \<and> wf_eqs ar V \<Longrightarrow> wf_eqs ar (U @ V)"
+proof (induction U)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons a U)
+  then show ?case
+    by (metis (no_types, lifting) append_Cons list.sel(3) self_append_conv2 wf_eqs.cases wf_eqs.intros(2))
+qed
+
 lemma wf_subst_unify:
-"\<lbrakk> unify eqs = Some \<sigma>; wf_eqs arity eqs \<rbrakk> \<Longrightarrow> wf_subst arity \<sigma>"
-  apply (induction eqs)
-   apply (simp add: wf_subst_def wf_term.intros(1))
-  oops
+  "unify U = Some \<sigma> \<and> wf_eqs arity U \<Longrightarrow> wf_subst arity \<sigma>"
+proof (induction U arbitrary: \<sigma> rule: unify.induct)
+  case 1
+then show ?case
+  by (metis empty_subsetI option.inject unify.simps(1) wf_subst_def wf_term.intros(1))
+next
+  case (2 x t U)
+  then show ?case
+  proof (cases "x \<in> fv t")
+    case True
+    then show ?thesis
+      by (metis "2.IH"(2) "2.prems" lemma_3_iv list.discI list.sel(3) option.discI unify.simps(2) wf_eqs.cases)
+  next
+    case False
+    obtain \<tau> where "unify (Var(x := t) · ((Var x, t) # U)) = Some \<tau>" sorry
+    have "wf_eqs arity (Var(x := t) · U)" sorry
+    
+(*
+
+ \<lbrakk>\<And>\<sigma>. \<lbrakk>unify (Var(x := t) · U) = Some \<sigma>; wf_eqs arity (Var(x := t) · U)\<rbrakk>
+
+ unify ((Var x, t) # U) = Some \<sigma>;
+     wf_eqs arity ((Var x, t) # U); x \<notin> fv t\<rbrakk>
+*)
+    then show ?thesis sorry
+  qed
+next
+  case (3 v va y U)
+  obtain "wf_eqs arity U" and "wf_eq arity (Fun v va, Var y)"
+    using "3.prems" wf_eqs.cases by fastforce
+  also have "wf_eq arity (Var y, Fun v va)" using calculation(2) prod.sel(2) wf_eq_def by fastforce
+  have "wf_eqs arity ((Var y, Fun v va) # U)"
+    by (simp add: \<open>wf_eq arity (Var y, Fun v va)\<close> calculation(1) wf_eqs.intros(2))
+  then show ?case using "3.IH" "3.prems"(1) by auto
+next
+  case (4 f u g v U)
+  obtain "f = g" and "length u = length v" using "4.prems"(1) by fastforce
+  obtain \<tau> where "unify (zip u v @ U) = Some \<tau>"
+    using "4.prems"(1) \<open>f = g\<close> \<open>length u = length v\<close> by auto
+  have "wf_eqs arity (zip u v)"
+    by (metis (no_types, lifting) "4.prems" \<open>length u = length v\<close> list.discI list.sel(1) map_fst_zip map_snd_zip wf_eqs.cases wf_fun_zip)
+  also have "wf_eqs arity U" using "4.prems" wf_eqs.cases by fastforce
+  then show ?case using "4.IH" "4.prems"(1) \<open>f = g\<close> \<open>length u = length v\<close> calculation wf_eqs_two_parts by auto
+  qed
 
 end
