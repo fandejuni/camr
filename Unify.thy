@@ -1,5 +1,5 @@
 theory Unify imports
-  Main
+  Main "HOL-Library.Adhoc_Overloading"
 begin
 
 (*
@@ -19,34 +19,36 @@ value "fv (Fun (1 :: nat) [Var (0 :: nat), Var 1, Fun 2 [Var 2, Fun 3 [Var 5]]])
 
 type_synonym ('f, 'v) subst = "'v \<Rightarrow> ('f, 'v) term"
 
-fun sapply :: "('f, 'v) subst \<Rightarrow> ('f, 'v) term \<Rightarrow> ('f, 'v) term" (infixr "·" 67)
+consts
+  SAPPLY_SYMBOL :: "('f, 'v) subst \<Rightarrow> 'a \<Rightarrow> 'a" (infixr "\<cdot>" 67)
+
+fun sapply :: "('f, 'v) subst \<Rightarrow> ('f, 'v) term \<Rightarrow> ('f, 'v) term"
   where
   "sapply s (Fun f l) = Fun f (map (sapply s) l)"
 | "sapply s (Var x) = s x"
+adhoc_overloading SAPPLY_SYMBOL sapply
 
-lemma fv_sapply[simp]: "fv (\<sigma> · t) = (\<Union> x \<in> (fv t). fv (\<sigma> x))"
+lemma fv_sapply[simp]: "fv (\<sigma> \<cdot> t) = (\<Union> x \<in> (fv t). fv (\<sigma> x))"
 proof (induction t)
   case (Var y)
-  have "fv (\<sigma> · Var y) = fv (\<sigma> y)" by simp
-  also have "... = (\<Union>x \<in> {y} .fv (\<sigma> x))" by simp
+  have "fv (\<sigma> \<cdot> (Var y)) = fv (\<sigma> y)" by simp
   also have "... = (\<Union>x \<in> fv (Var y) .fv (\<sigma> x))" by simp
   then show ?case by simp
 next
   case (Fun x1a x2)
-  then have "fv (\<sigma> · Fun x1a x2) = fold (\<union>) (map (fv \<circ> (sapply \<sigma>)) x2) {}" by simp
+  then have "fv (\<sigma> \<cdot> Fun x1a x2) = fold (\<union>) (map (fv \<circ> (sapply \<sigma>)) x2) {}" by simp
   also have "... = (\<Union>y\<in>(set x2).((fv \<circ> (sapply \<sigma>)) y))" by (metis Sup_set_fold set_map)
-  also have "... = (\<Union>y\<in>(set x2).(fv (\<sigma> · y)))" by simp
   also have "... =  (\<Union>y\<in>(set x2). (\<Union>yy\<in>fv y. fv (\<sigma> yy)))" using Fun.IH by simp
   also have "... = (\<Union>x\<in>fv (Fun x1a x2). fv (\<sigma> x))"
     by (metis Sup_set_fold UN_UN_flatten fv.simps(2) set_map)
-  also have "fv (\<sigma> · Fun x1a x2) = (\<Union>x\<in>fv (Fun x1a x2). fv (\<sigma> x))"
+  also have "fv (\<sigma> \<cdot> Fun x1a x2) = (\<Union>x\<in>fv (Fun x1a x2). fv (\<sigma> x))"
     using calculation by blast
   then show ?case by simp
 qed
 
 lemma sapply_cong:
   assumes "\<And>x. x \<in> fv t \<Longrightarrow> \<sigma> x = \<tau> x"
-  shows "\<sigma> · t = \<tau> · t"
+  shows "\<sigma> \<cdot> t = \<tau> \<cdot> t"
   using assms
   apply (induction t)
    apply auto
@@ -55,12 +57,12 @@ lemma sapply_cong:
 
 fun scomp :: "('f, 'v) subst \<Rightarrow> ('f, 'v) subst \<Rightarrow> ('f, 'v) subst" (infixl "\<circ>s" 75)
   where
-  "scomp \<sigma> \<tau> = (\<lambda> x. \<sigma> · \<tau>(x))"
+  "scomp \<sigma> \<tau> = (\<lambda> x. \<sigma> \<cdot> \<tau>(x))"
 
-lemma scomp_sapply[simp]: "(\<sigma> \<circ>s \<tau> ) x = \<sigma> ·(\<tau> x)"
+lemma scomp_sapply[simp]: "(\<sigma> \<circ>s \<tau> ) x = \<sigma> \<cdot>(\<tau> x)"
   by simp
 
-lemma sapply_scomp_distrib[simp]: "(\<sigma> \<circ>s \<tau> ) · t = \<sigma> · (\<tau> · t)"
+lemma sapply_scomp_distrib[simp]: "(\<sigma> \<circ>s \<tau> ) \<cdot> t = \<sigma> \<cdot> (\<tau> \<cdot> t)"
   apply (induction t)
    apply simp_all
   done
@@ -77,7 +79,7 @@ proof (rule ext)
     by simp
 qed
 
-lemma Var_id: "Var · t = t"
+lemma Var_id: "Var \<cdot> t = t"
 proof (induction t)
   case (Var x)
 then show ?case by simp
@@ -132,7 +134,7 @@ lemma fv_fun[simp]: "fv (Fun f l) = (\<Union> x \<in> (set l). fv x)"
   by (metis Sup_set_fold fv.simps(2) set_map)
 
 lemma fv_sapply_sdom_svran[simp]:
-  assumes "x \<in> fv (\<sigma> · t)"
+  assumes "x \<in> fv (\<sigma> \<cdot> t)"
   shows "x \<in> (fv t - sdom \<sigma>) \<union> svran \<sigma>"
   using assms
 proof (induction t)
@@ -142,7 +144,7 @@ proof (induction t)
     case True
     then have "\<sigma> y \<in> sran \<sigma>" by auto
     then have "fv (\<sigma> y) \<subseteq> svran \<sigma>" by auto
-    then have "fv (\<sigma> · (Var y)) \<subseteq> svran \<sigma>" by simp
+    then have "fv (\<sigma> \<cdot> (Var y)) \<subseteq> svran \<sigma>" by simp
     then show ?thesis using Var.prems by blast
   next
     case False
@@ -150,9 +152,9 @@ proof (induction t)
   qed
 next
   case (Fun x1a x2)
-  have "x \<in> (\<Union>x2a \<in> (set x2). fv (\<sigma> · x2a))"
+  have "x \<in> (\<Union>x2a \<in> (set x2). fv (\<sigma> \<cdot> x2a))"
     by (metis (no_types, lifting) Fun.prems SUP_UNION Sup.SUP_cong fv_fun fv_sapply)
-  also obtain x2a where "x2a \<in> (set x2) \<and> x \<in> fv (\<sigma> · x2a)"
+  also obtain x2a where "x2a \<in> (set x2) \<and> x \<in> fv (\<sigma> \<cdot> x2a)"
     using calculation by blast
   then show ?case
     by (metis Diff_iff Fun.IH UN_I UnE UnI1 UnI2 fv_fun)
@@ -180,46 +182,48 @@ fun fv_eq :: "('f , 'v) equation \<Rightarrow> 'v set" where
 fun fv_eq_system :: "('f, 'v) equations \<Rightarrow> 'v set" where
   "fv_eq_system l = fold (\<union>) (map fv_eq l) {}"
 
-fun sapply_eq :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equation \<Rightarrow> ('f, 'v) equation" (infixr "·" 67)
+fun sapply_eq :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equation \<Rightarrow> ('f, 'v) equation"
   where
   "sapply_eq \<sigma> eq = (sapply \<sigma> (fst eq), sapply \<sigma> (snd eq))"
+adhoc_overloading SAPPLY_SYMBOL sapply_eq
 
-fun sapply_eq_system :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equations \<Rightarrow> ('f, 'v) equations" (infixr "·" 67)
+fun sapply_eq_system :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equations \<Rightarrow> ('f, 'v) equations"
   where
 "sapply_eq_system \<sigma> l = map (sapply_eq \<sigma>) l"
+adhoc_overloading SAPPLY_SYMBOL sapply_eq_system
 
-lemma fv_sapply_eq[simp]: "fv_eq (\<sigma> · eq) = (\<Union> x \<in> (fv_eq eq). fv (\<sigma> x))"
+lemma fv_sapply_eq[simp]: "fv_eq (\<sigma> \<cdot> eq) = (\<Union> x \<in> (fv_eq eq). fv (\<sigma> x))"
   by simp
 
-lemma fv_sapply_eq_system[simp]: "fv_eq_system (\<sigma> · s) = (\<Union> x \<in> (fv_eq_system s). fv (\<sigma> x))"
+lemma fv_sapply_eq_system[simp]: "fv_eq_system (\<sigma> \<cdot> s) = (\<Union> x \<in> (fv_eq_system s). fv (\<sigma> x))"
 proof (induction s)
   case Nil
   then show ?case by simp
 next
   case (Cons eq s)
-  have "fv_eq_system (\<sigma> · (eq # s)) = fold (\<union>) (map fv_eq (\<sigma> · (eq # s))) {}" by simp
-  also have "... = (\<Union>y\<in>(set (\<sigma> · (eq # s))). fv_eq y)" by (metis Sup_set_fold set_map)
-  also have "... = (\<Union>y\<in>(set (\<sigma> · s)). fv_eq y) \<union> (\<Union>y\<in>(set (\<sigma> · [eq])). fv_eq y)" by (simp add: inf_sup_aci(5))
-  have "(\<Union>y\<in>(set (\<sigma> · s)). fv_eq y) = fv_eq_system (\<sigma> · s)"
+  have "fv_eq_system (\<sigma> \<cdot> (eq # s)) = fold (\<union>) (map fv_eq (\<sigma> \<cdot> (eq # s))) {}" by simp
+  also have "... = (\<Union>y\<in>(set (\<sigma> \<cdot> (eq # s))). fv_eq y)" by (metis Sup_set_fold set_map)
+  also have "... = (\<Union>y\<in>(set (\<sigma> \<cdot> s)). fv_eq y) \<union> (\<Union>y\<in>(set (\<sigma> \<cdot> [eq])). fv_eq y)" by (simp add: inf_sup_aci(5))
+  have "(\<Union>y\<in>(set (\<sigma> \<cdot> s)). fv_eq y) = fv_eq_system (\<sigma> \<cdot> s)"
     by (metis Sup_set_fold fv_eq_system.elims set_map)
   have "... = (\<Union> x \<in> (fv_eq_system s). fv (\<sigma> x))" using Cons.IH by blast
-  have "(\<Union>y\<in>(set (\<sigma> · [eq])). fv_eq y) =  (\<Union>x\<in>(fv_eq_system [eq]). fv (\<sigma> x))"
+  have "(\<Union>y\<in>(set (\<sigma> \<cdot> [eq])). fv_eq y) =  (\<Union>x\<in>(fv_eq_system [eq]). fv (\<sigma> x))"
     by auto
-  have "fv_eq_system (\<sigma> · (eq # s)) =
+  have "fv_eq_system (\<sigma> \<cdot> (eq # s)) =
              (\<Union> x \<in> (fv_eq_system s). fv (\<sigma> x)) \<union> (\<Union>x\<in>(fv_eq_system [eq]). fv (\<sigma> x))"
-    using Cons.IH \<open>(\<Union>y\<in>set (\<sigma> · s). fv_eq y) = fv_eq_system (\<sigma> · s)\<close> calculation by auto
+    using Cons.IH \<open>(\<Union>y\<in>set (\<sigma> \<cdot> s). fv_eq y) = fv_eq_system (\<sigma> \<cdot> s)\<close> calculation by auto
   also have "... = (\<Union> x \<in> (fv_eq_system (eq # s)). fv (\<sigma> x))"
     by (metis (no_types, lifting) Sup_set_fold UN_Un UN_insert Union_image_empty empty_set fv_eq_system.elims inf_sup_aci(5) list.simps(15) set_map)
   then show ?case
-    using \<open>fv_eq_system (\<sigma> · (eq # s)) = (\<Union>x\<in>fv_eq_system s. fv (\<sigma> x)) \<union> (\<Union>x\<in>fv_eq_system [eq]. fv (\<sigma> x))\<close> by auto
+    using \<open>fv_eq_system (\<sigma> \<cdot> (eq # s)) = (\<Union>x\<in>fv_eq_system s. fv (\<sigma> x)) \<union> (\<Union>x\<in>fv_eq_system [eq]. fv (\<sigma> x))\<close> by auto
 qed
 
-lemma sapply_scomp_distrib_eq[simp]: "(\<sigma> \<circ>s \<tau>) · (eq :: ('f, 'v) equation) = \<sigma> · (\<tau> · eq)"
+lemma sapply_scomp_distrib_eq[simp]: "(\<sigma> \<circ>s \<tau>) \<cdot> (eq :: ('f, 'v) equation) = \<sigma> \<cdot> (\<tau> \<cdot> eq)"
   apply auto
   using sapply_scomp_distrib apply force+
   done
 
-lemma sapply_scomp_distrib_eq_system[simp]: "(\<sigma> \<circ>s \<tau>) · (s :: ('f, 'v) equations) = \<sigma> · (\<tau> · s)"
+lemma sapply_scomp_distrib_eq_system[simp]: "(\<sigma> \<circ>s \<tau>) \<cdot> (s :: ('f, 'v) equations) = \<sigma> \<cdot> (\<tau> \<cdot> s)"
   apply auto
   using sapply_scomp_distrib apply force+
   done
@@ -227,7 +231,7 @@ lemma sapply_scomp_distrib_eq_system[simp]: "(\<sigma> \<circ>s \<tau>) · (s ::
 (* 2. (b) *)
 
 inductive unifies :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equation \<Rightarrow> bool" where
-  unifies_eq: "(\<sigma> · u = \<sigma> · t) \<Longrightarrow> unifies \<sigma> (u, t)"
+  unifies_eq: "(\<sigma> \<cdot> u = \<sigma> \<cdot> t) \<Longrightarrow> unifies \<sigma> (u, t)"
 
 inductive unifiess :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equations \<Rightarrow> bool" where
   unifiess_empty: "unifiess \<sigma> []"
@@ -240,10 +244,10 @@ fun is_mgu :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equations \<Rightarrow> boo
 
 lemma unifies_sapply_eq[simp]: "unifies \<sigma> (sapply_eq \<tau> eq) \<longleftrightarrow> unifies (\<sigma> \<circ>s \<tau> ) eq"
 proof -
-  have "unifies \<sigma> (sapply_eq \<tau> eq) \<longleftrightarrow> \<sigma> · (fst (sapply_eq \<tau> eq)) = \<sigma> · (snd (sapply_eq \<tau> eq))"
+  have "unifies \<sigma> (sapply_eq \<tau> eq) \<longleftrightarrow> \<sigma> \<cdot> (fst (sapply_eq \<tau> eq)) = \<sigma> \<cdot> (snd (sapply_eq \<tau> eq))"
     by (simp add: unifies.simps)
-  also have "... \<longleftrightarrow> \<sigma> · (\<tau>  · (fst eq)) = \<sigma> · (\<tau>  · (snd eq))" by simp
-  also have "... \<longleftrightarrow> (\<sigma> \<circ>s \<tau>)  · (fst eq) = (\<sigma> \<circ>s \<tau>)  · (snd eq)" by (metis sapply_scomp_distrib)
+  also have "... \<longleftrightarrow> \<sigma> \<cdot> (\<tau>  \<cdot> (fst eq)) = \<sigma> \<cdot> (\<tau>  \<cdot> (snd eq))" by simp
+  also have "... \<longleftrightarrow> (\<sigma> \<circ>s \<tau>)  \<cdot> (fst eq) = (\<sigma> \<circ>s \<tau>)  \<cdot> (snd eq)" by (metis sapply_scomp_distrib)
   also have "... \<longleftrightarrow> unifies (\<sigma> \<circ>s \<tau> ) eq" using unifies.simps by force
   then show ?thesis using calculation by blast
 qed
@@ -335,28 +339,28 @@ proof (induction U)
   then show ?case by auto
 next
   case (Cons a U)
-  have "fv_eq_system (Var(x := t) · (a # U)) = (fv_eq_system (Var(x := t) · U)) \<union> (fv_eq (Var(x := t) · a))"
+  have "fv_eq_system (Var(x := t) \<cdot> (a # U)) = (fv_eq_system (Var(x := t) \<cdot> U)) \<union> (fv_eq (Var(x := t) \<cdot> a))"
     by (metis fold_simps(2) fold_union_basic fv_eq_system.elims list.simps(9) sapply_eq_system.elims sup_bot.right_neutral)
-  moreover have "x \<notin> fv_eq_system (Var(x := t) · U)"
+  moreover have "x \<notin> fv_eq_system (Var(x := t) \<cdot> U)"
     using Cons.IH by blast
-  moreover have "x \<notin> (fv_eq (Var(x := t) · a))" by (simp add: assms)
+  moreover have "x \<notin> (fv_eq (Var(x := t) \<cdot> a))" by (simp add: assms)
   then show ?case by (metis Cons.IH UnE calculation(1))
 qed
 
 lemma prelim_prelim_unify:
-  assumes "y \<in> fv_eq (Var(x := t) · a)"
+  assumes "y \<in> fv_eq (Var(x := t) \<cdot> a)"
   shows "y \<in> fold (\<union>) (map fv_eq (a # U)) (insert x (fv t))"
   using assms
-  apply (auto simp add: Sup_set_fold UnI1 UnI2 assms fun_upd_other fun_upd_same insertI1 insertI2 list.simps(15) singletonD)
+  apply auto
   apply (metis (mono_tags, hide_lams) Sup_set_fold Un_iff Un_insert_right fold_union_basic fv.simps(1) fv_eq.simps inf_sup_aci(5) insert_iff singleton_iff)+
   done
 
 lemma prelim_unify_2:
   assumes "x \<notin> fv t"
-  shows "(fold (\<union>) (map (fv_eq \<circ> (·) (Var(x := t))) U) {}) \<subseteq> (fold (\<union>) (map fv_eq U) (insert x (fv t)))"
+  shows "(fold (\<union>) (map (fv_eq \<circ> (\<cdot>) (Var(x := t))) U) {}) \<subseteq> (fold (\<union>) (map fv_eq U) (insert x (fv t)))"
 proof (rule subsetI)
   fix y
-  assume "y \<in> fold (\<union>) (map (fv_eq \<circ> (·) (Var(x := t))) U) {}"
+  assume "y \<in> fold (\<union>) (map (fv_eq \<circ> (\<cdot>) (Var(x := t))) U) {}"
   thus "y \<in> fold (\<union>) (map fv_eq U) (insert x (fv t))"
   proof (induction U)
     case Nil
@@ -364,7 +368,7 @@ proof (rule subsetI)
   next
     case (Cons a U)
     then show ?case
-    proof (cases "y \<in> fold (\<union>) (map (fv_eq \<circ> (·) (Var(x := t))) (U)) {}")
+    proof (cases "y \<in> fold (\<union>) (map (fv_eq \<circ> (\<cdot>) (Var(x := t))) (U)) {}")
       case True
       then show ?thesis
         by (metis (no_types, lifting) Cons.IH UnCI UnE fold_map fold_simps(2) fold_union_basic)
@@ -384,7 +388,7 @@ qed
 
 lemma measure_unify:
   assumes "x \<notin> fv t"
-  shows "card (fold (\<union>) (map (fv_eq \<circ> (·) (Var(x := t))) U) {})
+  shows "card (fold (\<union>) (map (fv_eq \<circ> (\<cdot>) (Var(x := t))) U) {})
        < card (fold (\<union>) (map fv_eq U) (insert x (fv t)))"
   (is "card (?s1) < card (?s2)")
   using assms
@@ -463,7 +467,7 @@ function (sequential) unify :: "('f, 'v) equations \<Rightarrow> ('f, 'v) subst 
   "unify [] = Some Var"
 | "unify ((Var x, t) # U) = (
   if (x \<notin> fv t) then
-    lifted_comp (unify((Var(x := t)) · U)) (Var(x := t))
+    lifted_comp (unify((Var(x := t)) \<cdot> U)) (Var(x := t))
    else (
      if Var x = t then unify(U) else None
     )
@@ -535,7 +539,7 @@ qed
 qed
 
 lemma case_unify:
-  assumes h1: "\<And>\<sigma>. \<lbrakk>x \<notin> fv t; unify (Var(x := t) · U) = Some \<sigma>\<rbrakk> \<Longrightarrow> unifiess \<sigma> (Var(x := t) · U)"
+  assumes h1: "\<And>\<sigma>. \<lbrakk>x \<notin> fv t; unify (Var(x := t) \<cdot> U) = Some \<sigma>\<rbrakk> \<Longrightarrow> unifiess \<sigma> (Var(x := t) \<cdot> U)"
     and h2: "\<And>\<sigma>. \<lbrakk>\<not> x \<notin> fv t; Var x = t; unify U = Some \<sigma>\<rbrakk> \<Longrightarrow> unifiess \<sigma> U"
     and h3: "unify ((Var x, t) # U) = Some \<sigma>"
   shows "unifiess \<sigma> ((Var x, t) # U)"
@@ -546,22 +550,22 @@ proof (cases "x \<in> fv t")
     by (metis assms(2) assms(3) option.discI unifies_eq unifiess_rec unify.simps(2))
 next
   case False
-  obtain \<tau> where "Some \<tau> = lifted_comp (unify (Var(x := t) · U)) (Var(x := t))"
+  obtain \<tau> where "Some \<tau> = lifted_comp (unify (Var(x := t) \<cdot> U)) (Var(x := t))"
     using False h3 by auto
-  also obtain \<sigma> where "(Some \<sigma>) = (unify (Var(x := t) · U))"
+  also obtain \<sigma> where "(Some \<sigma>) = (unify (Var(x := t) \<cdot> U))"
     by (metis calculation lifted_comp.elims)
   have "\<tau> =  \<sigma> \<circ>s (Var(x := t))"
-    by (metis False \<open>Some \<sigma> = unify (Var(x := t) · U)\<close> calculation h3 lifted_comp.simps(2) map_upd_eqD1 sapply_eq_system.simps unify.simps(2))
-  have "\<tau> · (Var x) = (\<sigma> \<circ>s (Var(x := t))) · (Var x)"
+    by (metis \<open>Some \<sigma> = unify (Var(x := t) \<cdot> U)\<close> calculation lifted_comp.simps(2) map_upd_eqD1)
+  have "\<tau> \<cdot> (Var x) = (\<sigma> \<circ>s (Var(x := t))) \<cdot> (Var x)"
     by (simp add: \<open>\<tau> = \<sigma> \<circ>s Var(x := t)\<close>)
-  have "... = \<sigma> · t"
+  have "... = \<sigma> \<cdot> t"
     by simp
-  moreover have "... = (\<sigma> \<circ>s (Var(x := t))) · t"
+  moreover have "... = (\<sigma> \<circ>s (Var(x := t))) \<cdot> t"
     by (metis (mono_tags, lifting) False fun_upd_other sapply_cong scomp.elims scomp_Var)
-  moreover have "... = \<tau> · t"
+  moreover have "... = \<tau> \<cdot> t"
     by (simp add: \<open>\<tau> = \<sigma> \<circ>s Var(x := t)\<close>)
   then show ?thesis
-    by (metis False \<open>Some \<sigma> = unify (Var(x := t) · U)\<close> \<open>\<sigma> \<circ>s Var(x := t) · Var x = \<sigma> · t\<close> \<open>\<sigma> · t = \<sigma> \<circ>s Var(x := t) · t\<close> \<open>\<tau> = \<sigma> \<circ>s Var(x := t)\<close> calculation h1 h3 option.inject unifies_eq unifies_sapply_eq_sys unifiess_rec unify.simps(2))
+    by (metis False \<open>Some \<sigma> = unify (Var(x := t) \<cdot> U)\<close> \<open>\<sigma> \<circ>s Var(x := t) \<cdot> Var x = \<sigma> \<cdot> t\<close> \<open>\<sigma> \<cdot> t = \<sigma> \<circ>s Var(x := t) \<cdot> t\<close> \<open>\<tau> = \<sigma> \<circ>s Var(x := t)\<close> calculation h1 h3 option.inject unifies_eq unifies_sapply_eq_sys unifiess_rec unify.simps(2))
 qed
 
 lemma unifiess_zip_simple_2:
@@ -593,6 +597,18 @@ next
   then show ?case
     by (metis (no_types, lifting) append_is_Nil_conv hd_append2 list.sel(1) list.sel(3) tl_append2 unifiess.simps)
 qed
+
+(*
+lemma test:
+  "\<lbrakk>length u = length v; unifiess \<sigma> (zip u v)\<rbrakk> \<Longrightarrow> map (sapply \<sigma>) u = map (sapply \<sigma>) v"
+proof (induction u v rule: list_induct2)
+  case Nil
+  then show ?case sorry
+next
+  case (Cons x xs y ys)
+  then show ?case sorry
+qed
+*)
 
 lemma test:
   assumes "unifiess \<sigma> u"
@@ -650,7 +666,7 @@ Hint: Split the proof into two parts and prove them separately by computational 
 *)
 
 lemma unifies_fv_same:
-  assumes "\<tau> · Var x = \<tau> · t"
+  assumes "\<tau> \<cdot> Var x = \<tau> \<cdot> t"
   and "x \<notin> fv t"
   shows "sapply (\<tau> \<circ>s (Var(x := t))) = sapply \<tau>"
 proof (rule ext)
@@ -677,7 +693,7 @@ lemma sapply_equal:
 proof (rule ext)
   show "\<sigma> x = \<tau> x" for x
   proof -
-    have "\<sigma> x = sapply \<sigma> (Var x)" by (metis assms sapply.simps(2))
+    have "\<sigma> x = sapply \<sigma> (Var x)" by (metis sapply.simps(2))
     also have "... = sapply \<tau> (Var x)" by (simp add: assms)
     also have "... = \<tau> x" by simp
     then show ?thesis by (simp add: calculation)
@@ -686,7 +702,7 @@ qed
 
 lemma case_mgu_unify:
   fixes \<sigma>
-  assumes "\<And>\<sigma>2 \<tau>. \<lbrakk>x \<notin> fv t; unify (Var(x := t) · U) = Some \<sigma>2; unifiess \<tau> (Var(x := t) · U)\<rbrakk> \<Longrightarrow> \<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>2"
+  assumes "\<And>\<sigma>2 \<tau>. \<lbrakk>x \<notin> fv t; unify (Var(x := t) \<cdot> U) = Some \<sigma>2; unifiess \<tau> (Var(x := t) \<cdot> U)\<rbrakk> \<Longrightarrow> \<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>2"
 and "\<And>\<sigma>2 \<tau>. \<lbrakk>\<not> x \<notin> fv t; Var x = t; unify U = Some \<sigma>2; unifiess \<tau> U\<rbrakk> \<Longrightarrow> \<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>2"
 and "unify ((Var x, t) # U) = Some \<sigma>"
 and "unifiess \<tau> ((Var x, t) # U)"
@@ -697,21 +713,21 @@ proof (cases "x \<in> fv t")
     by (metis assms(2) assms(3) assms(4) list.discI list.sel(3) option.discI unifiess.simps unify.simps(2))
 next
   case False
-  obtain \<sigma>2 where "unify (Var(x := t) · U) = Some \<sigma>2"
+  obtain \<sigma>2 where "unify (Var(x := t) \<cdot> U) = Some \<sigma>2"
     using False assms(3) by fastforce
   also have "\<sigma> = \<sigma>2 \<circ>s (Var(x := t))"
     using False assms(3) calculation by auto
-  have "\<tau> · (Var x) = \<tau> · t"
+  have "\<tau> \<cdot> (Var x) = \<tau> \<cdot> t"
     by (metis assms(4) list.discI list.sel(1) prod.sel(1) prod.sel(2) unifies.simps unifiess.simps)
-  have "\<forall>(u,w)\<in>(set U). \<tau> · u = \<tau> · w"
+  have "\<forall>(u,w)\<in>(set U). \<tau> \<cdot> u = \<tau> \<cdot> w"
     by (metis (mono_tags, lifting) alternative_definition_unifiess assms(4) case_prodI2 insert_iff list.set(2) prod.sel(1) prod.sel(2) unifies.simps)
-  have "unifiess \<tau> (Var(x := t) · U)"
-    by (metis False \<open>\<tau> · Var x = \<tau> · t\<close> assms(4) list.discI list.sel(3) unifies_equal_sapply unifies_fv_same unifies_sapply_eq_sys unifiess.simps)
+  have "unifiess \<tau> (Var(x := t) \<cdot> U)"
+    by (metis False \<open>\<tau> \<cdot> Var x = \<tau> \<cdot> t\<close> assms(4) list.discI list.sel(3) unifies_equal_sapply unifies_fv_same unifies_sapply_eq_sys unifiess.simps)
   obtain \<rho> where "\<tau> = \<rho> \<circ>s \<sigma>2"
-    using False \<open>unifiess \<tau> (Var(x := t) · U)\<close> assms(1) calculation by auto
+    using False \<open>unifiess \<tau> (Var(x := t) \<cdot> U)\<close> assms(1) calculation by auto
   moreover have "sapply (\<tau> \<circ>s (Var(x := t))) = sapply \<tau>"
-    by (meson False \<open>\<tau> · Var x = \<tau> · t\<close> unifies_fv_same)
-  moreover have "\<tau> = \<rho> \<circ>s \<sigma>" by (metis \<open>sapply (\<tau> \<circ>s Var(x := t)) = (·) \<tau>\<close> \<open>\<sigma> = \<sigma>2 \<circ>s Var(x := t)\<close> calculation(2) sapply_equal scomp_assoc)
+    by (meson False \<open>\<tau> \<cdot> Var x = \<tau> \<cdot> t\<close> unifies_fv_same)
+  moreover have "\<tau> = \<rho> \<circ>s \<sigma>" by (metis \<open>sapply (\<tau> \<circ>s Var(x := t)) = (\<cdot>) \<tau>\<close> \<open>\<sigma> = \<sigma>2 \<circ>s Var(x := t)\<close> calculation(2) sapply_equal scomp_assoc)
   then show ?thesis
     by blast
 qed
@@ -725,7 +741,7 @@ proof -
   also have "map (sapply \<tau>) ((fst a) # (map fst u)) = map (sapply \<tau>) ((snd a) # (map snd u))"
     using calculation by auto
   moreover have "map (sapply \<tau>) (map fst u) = map (sapply \<tau>) (map snd u)"
-    using \<open>map ((·) \<tau>) (fst a # map fst u) = map ((·) \<tau>) (snd a # map snd u)\<close> by auto
+    using \<open>map ((\<cdot>) \<tau>) (fst a # map fst u) = map ((\<cdot>) \<tau>) (snd a # map snd u)\<close> by auto
   then show ?thesis
     by (metis (no_types, lifting) assms prod.sel(1) prod.sel(2) sapply.simps(1) term.inject(2) unifies.simps)
 qed
@@ -739,7 +755,7 @@ proof -
   moreover have "map (sapply \<tau>) ((fst a) # (map fst u)) = map (sapply \<tau>) ((snd a) # (map snd u))"
     using calculation by auto
   moreover have "map (sapply \<tau>) [fst a] = map (sapply \<tau>) [snd a]"
-    using \<open>map ((·) \<tau>) (fst a # map fst u) = map ((·) \<tau>) (snd a # map snd u)\<close> by auto
+    using \<open>map ((\<cdot>) \<tau>) (fst a # map fst u) = map ((\<cdot>) \<tau>) (snd a # map snd u)\<close> by auto
   then show ?thesis
     using unifies_eq by fastforce
 qed
@@ -869,7 +885,7 @@ proof -
     using assms increasing_sum_liste by auto
   have "sum_liste (map size_term (map (sapply \<tau>) [xa])) = size_term (sapply \<tau> xa)" by simp
   then show ?thesis
-    using \<open>sum_liste (map Unify.size_term (map ((·) \<tau>) [xa])) \<le> sum_liste (map Unify.size_term (map ((·) \<tau>) x2))\<close> calculation by linarith
+    using \<open>sum_liste (map Unify.size_term (map ((\<cdot>) \<tau>) [xa])) \<le> sum_liste (map Unify.size_term (map ((\<cdot>) \<tau>) x2))\<close> calculation by linarith
 qed
 
 lemma size_term_subterm_prelim:
@@ -887,7 +903,7 @@ next
   have "size_term (sapply \<tau> xa) \<le> size_term (sapply \<tau> (Fun x1a x2))"
     using calculation(1) size_term_fun by auto
   then show ?case
-    using \<open>Unify.size_term (\<tau> · Var x) \<le> Unify.size_term (\<tau> · xa)\<close> dual_order.trans by blast
+    using \<open>Unify.size_term (\<tau> \<cdot> Var x) \<le> Unify.size_term (\<tau> \<cdot> xa)\<close> dual_order.trans by blast
 qed
 
 lemma size_term_subset:
@@ -910,12 +926,12 @@ next
     have "xa \<in> (set ll)" using Cons.prems False by auto
     also have "size_term (sapply \<tau> (Fun f ll)) \<ge> 1 + size_term (sapply \<tau> xa)"
       using Cons.IH calculation by auto
-    have "size_term (\<tau> · Fun f (a # ll)) = size_term (Fun f (map (sapply \<tau>) (a # ll)))"
+    have "size_term (\<tau> \<cdot> Fun f (a # ll)) = size_term (Fun f (map (sapply \<tau>) (a # ll)))"
       by simp
     have "... = size_term ((sapply \<tau>) a) + size_term (Fun f (map (sapply \<tau>) ll))"
       by (simp add: fold_plus_sum_list_rev)
     then show ?thesis
-      using \<open>1 + Unify.size_term (\<tau> · xa) \<le> Unify.size_term (\<tau> · Fun f ll)\<close> by auto
+      using \<open>1 + Unify.size_term (\<tau> \<cdot> xa) \<le> Unify.size_term (\<tau> \<cdot> Fun f ll)\<close> by auto
   qed
 qed
 
@@ -958,11 +974,11 @@ next
         also have "sapply \<tau> (Var x) = sapply \<tau> t"
           by (metis calculation list.discI list.sel(1) prod.sel(1) prod.sel(2) unifies.simps unifiess.simps)
         have "size_term (sapply \<tau> (Var x)) = size_term (sapply \<tau> t)"
-          using \<open>\<tau> · Var x = \<tau> · t\<close> by auto
+          using \<open>\<tau> \<cdot> Var x = \<tau> \<cdot> t\<close> by auto
         have "size_term (sapply \<tau> (Var x)) < size_term (sapply \<tau> t)"
           by (meson True \<open>Var x \<noteq> t\<close> size_term_subterm)
         then show ?thesis
-          using \<open>Unify.size_term (\<tau> · Var x) = Unify.size_term (\<tau> · t)\<close> nat_neq_iff by blast
+          using \<open>Unify.size_term (\<tau> \<cdot> Var x) = Unify.size_term (\<tau> \<cdot> t)\<close> nat_neq_iff by blast
       qed
     qed
     then show ?thesis
@@ -975,7 +991,7 @@ next
     also have "sapply \<tau> (Var x) = sapply \<tau> t"
       by (metis calculation list.discI list.sel(1) prod.sel(1) prod.sel(2) unifies.simps unifiess.simps)
     have "sapply (\<tau> \<circ>s (Var(x := t))) = sapply \<tau>"
-      by (meson False \<open>\<tau> · Var x = \<tau> · t\<close> unifies_fv_same)
+      by (meson False \<open>\<tau> \<cdot> Var x = \<tau> \<cdot> t\<close> unifies_fv_same)
     have "unifiess (\<tau> \<circ>s (Var(x := t))) U"
       by (metis \<open>sapply (\<tau> \<circ>s Var(x := t)) = sapply \<tau>\<close> calculation list.distinct(1) list.sel(3) unifies_equal_sapply unifiess.cases)
     then show ?thesis
@@ -1045,7 +1061,7 @@ proof -
 qed
 
 lemma simple_fv_apply:
-  "fv_eq_system (\<sigma> · ((Var x, Var y) # U)) = fv (\<sigma> x) \<union> fv (\<sigma> y) \<union> fv_eq_system (\<sigma> · U)"
+  "fv_eq_system (\<sigma> \<cdot> ((Var x, Var y) # U)) = fv (\<sigma> x) \<union> fv (\<sigma> y) \<union> fv_eq_system (\<sigma> \<cdot> U)"
   apply (auto simp add: SUP_union simple_fv_eq_system_double_var sup_assoc sup_left_commute)
      apply (metis UnE fold_union_basic)
   using fold_union_basic apply fastforce+
@@ -1106,7 +1122,7 @@ proof -
 qed
 
 lemma lemma_3_i_iii:
-  "unify U = Some \<sigma> \<Longrightarrow> fv_eq_system (\<sigma> · U) \<subseteq> fv_eq_system U \<and> sdom \<sigma> \<subseteq> fv_eq_system U \<and> svran \<sigma> \<subseteq> fv_eq_system U"
+  "unify U = Some \<sigma> \<Longrightarrow> fv_eq_system (\<sigma> \<cdot> U) \<subseteq> fv_eq_system U \<and> sdom \<sigma> \<subseteq> fv_eq_system U \<and> svran \<sigma> \<subseteq> fv_eq_system U"
 proof (induction arbitrary: \<sigma> rule: unify.induct)
   case 1
   then show ?case
@@ -1128,11 +1144,11 @@ next
   (* SIMP CASE *)
 
     have "unify U = unify ((Var x, t) # U)" using \<open>Var x = t\<close> by auto
-    have "fv_eq_system (\<sigma> · U) \<subseteq> fv_eq_system U \<and> sdom \<sigma> \<subseteq> fv_eq_system U \<and> svran \<sigma> \<subseteq> fv_eq_system U"
+    have "fv_eq_system (\<sigma> \<cdot> U) \<subseteq> fv_eq_system U \<and> sdom \<sigma> \<subseteq> fv_eq_system U \<and> svran \<sigma> \<subseteq> fv_eq_system U"
       using "2"(2) "2.prems" True \<open>Var x = t\<close> \<open>unify U = unify ((Var x, t) # U)\<close> by auto
     also have "fv_eq_system ((Var x, t) # U) = (fv_eq_system U) \<union> {x}"
       by (metis \<open>Var x = t\<close> insert_absorb2 simple_fv_eq_system_double_var)
-    moreover have "fv_eq_system (\<sigma> · ((Var x, t) # U)) = fv (\<sigma> x) \<union> fv_eq_system (\<sigma> · U)"
+    moreover have "fv_eq_system (\<sigma> \<cdot> ((Var x, t) # U)) = fv (\<sigma> x) \<union> fv_eq_system (\<sigma> \<cdot> U)"
       using \<open>Var x = t\<close> simple_fv_apply by fastforce
     have "fv (\<sigma> x) \<subseteq> {x} \<union> fv_eq_system ((Var x, t) # U)"
     proof -
@@ -1153,55 +1169,55 @@ next
     moreover have "svran \<sigma> \<subseteq> fv_eq_system ((Var x, t) # U)"
       using calculation(1) calculation(2) by blast
     then show ?thesis
-      using \<open>fv_eq_system (\<sigma> · ((Var x, t) # U)) = fv (\<sigma> x) \<union> fv_eq_system (\<sigma> · U)\<close> calculation(1) calculation(2) calculation(3) by auto
+      using \<open>fv_eq_system (\<sigma> \<cdot> ((Var x, t) # U)) = fv (\<sigma> x) \<union> fv_eq_system (\<sigma> \<cdot> U)\<close> calculation(1) calculation(2) calculation(3) by auto
   next
     case False
 
 (* CASE UNIFY *)
 
-    obtain \<sigma>2 where "unify (Var(x := t) · ((Var x, t) # U)) = Some \<sigma>2"
+    obtain \<sigma>2 where "unify (Var(x := t) \<cdot> ((Var x, t) # U)) = Some \<sigma>2"
       by (metis (no_types, hide_lams) "2.prems" False completeness lifted_comp.elims option.discI soundness1 unifies_sapply_eq_sys unify.simps(2))
     have "\<sigma> = \<sigma>2 \<circ>s (Var(x := t))" sorry
 (*
-      by (metis "2.prems" False \<open>unify (Var(x := t) · ((Var x, t) # U)) = Some \<sigma>2\<close> lifted_comp.simps(2) option.inject unify.simps(2))
+      by (metis "2.prems" False \<open>unify (Var(x := t) \<cdot> ((Var x, t) # U)) = Some \<sigma>2\<close> lifted_comp.simps(2) option.inject unify.simps(2))
 *)
-    have "fv_eq_system (Var(x := t) · U) \<subseteq> fv(t) \<union> fv_eq_system(U)"
+    have "fv_eq_system (Var(x := t) \<cdot> U) \<subseteq> fv(t) \<union> fv_eq_system(U)"
 (* TODO *)
       by (smt UN_iff UnI1 fun_upd_apply fv.simps(1) fv_sapply_eq_system singletonD subsetCE subsetI sup.cobounded2)
-    obtain "fv_eq_system (\<sigma> · Var(x := t) · U) \<subseteq> fv_eq_system (Var(x := t) · U) \<and> sdom \<sigma> \<subseteq> fv_eq_system (Var(x := t) · U) \<and> svran \<sigma> \<subseteq> fv_eq_system (Var(x := t) · U)" sorry
+    obtain "fv_eq_system (\<sigma> \<cdot> Var(x := t) \<cdot> U) \<subseteq> fv_eq_system (Var(x := t) \<cdot> U) \<and> sdom \<sigma> \<subseteq> fv_eq_system (Var(x := t) \<cdot> U) \<and> svran \<sigma> \<subseteq> fv_eq_system (Var(x := t) \<cdot> U)" sorry
 (*
       using "2.IH"(1) "2.prems" False by blast
 *)
-    have "fv_eq_system (\<sigma>2 · (Var(x := t) · U)) \<subseteq> fv(t) \<union> fv_eq_system(U)" sorry
+    have "fv_eq_system (\<sigma>2 \<cdot> (Var(x := t) \<cdot> U)) \<subseteq> fv(t) \<union> fv_eq_system(U)" sorry
 (*
-      by (smt "2.IH"(1) "2.prems" False \<open>\<sigma> = \<sigma>2 \<circ>s Var(x := t)\<close> \<open>fv_eq_system (Var(x := t) · U) \<subseteq> fv t \<union> fv_eq_system U\<close> lifted_comp.elims option.distinct(1) option.inject sapply_scomp_distrib_eq_system sup.absorb_iff2 sup.coboundedI1 unify.simps(2))
-      using "2.prems" \<open>\<And>thesis. (fv_eq_system (\<sigma> · Var(x := t) · U) \<subseteq> fv_eq_system (Var(x := t) · U) \<and> sdom \<sigma> \<subseteq> fv_eq_system (Var(x := t) · U) \<and> svran \<sigma> \<subseteq> fv_eq_system (Var(x := t) · U) \<Longrightarrow> thesis) \<Longrightarrow> thesis\<close> \<open>fv_eq_system (Var(x := t) · U) \<subseteq> fv t \<union> fv_eq_system U\<close> \<open>unify (Var(x := t) · ((Var x, t) # U)) = Some \<sigma>2\<close> by auto
+      by (smt "2.IH"(1) "2.prems" False \<open>\<sigma> = \<sigma>2 \<circ>s Var(x := t)\<close> \<open>fv_eq_system (Var(x := t) \<cdot> U) \<subseteq> fv t \<union> fv_eq_system U\<close> lifted_comp.elims option.distinct(1) option.inject sapply_scomp_distrib_eq_system sup.absorb_iff2 sup.coboundedI1 unify.simps(2))
+      using "2.prems" \<open>\<And>thesis. (fv_eq_system (\<sigma> \<cdot> Var(x := t) \<cdot> U) \<subseteq> fv_eq_system (Var(x := t) \<cdot> U) \<and> sdom \<sigma> \<subseteq> fv_eq_system (Var(x := t) \<cdot> U) \<and> svran \<sigma> \<subseteq> fv_eq_system (Var(x := t) \<cdot> U) \<Longrightarrow> thesis) \<Longrightarrow> thesis\<close> \<open>fv_eq_system (Var(x := t) \<cdot> U) \<subseteq> fv t \<union> fv_eq_system U\<close> \<open>unify (Var(x := t) \<cdot> ((Var x, t) # U)) = Some \<sigma>2\<close> by auto
 *)
     have "sdom \<sigma>2 \<subseteq> fv t \<union> fv_eq_system U" sorry
 (*
-      using "2.prems" \<open>\<And>thesis. (fv_eq_system (\<sigma> · Var(x := t) · U) \<subseteq> fv_eq_system (Var(x := t) · U) \<and> sdom \<sigma> \<subseteq> fv_eq_system (Var(x := t) · U) \<and> svran \<sigma> \<subseteq> fv_eq_system (Var(x := t) · U) \<Longrightarrow> thesis) \<Longrightarrow> thesis\<close> \<open>fv_eq_system (Var(x := t) · U) \<subseteq> fv t \<union> fv_eq_system U\<close> \<open>unify (Var(x := t) · ((Var x, t) # U)) = Some \<sigma>2\<close> by auto
+      using "2.prems" \<open>\<And>thesis. (fv_eq_system (\<sigma> \<cdot> Var(x := t) \<cdot> U) \<subseteq> fv_eq_system (Var(x := t) \<cdot> U) \<and> sdom \<sigma> \<subseteq> fv_eq_system (Var(x := t) \<cdot> U) \<and> svran \<sigma> \<subseteq> fv_eq_system (Var(x := t) \<cdot> U) \<Longrightarrow> thesis) \<Longrightarrow> thesis\<close> \<open>fv_eq_system (Var(x := t) \<cdot> U) \<subseteq> fv t \<union> fv_eq_system U\<close> \<open>unify (Var(x := t) \<cdot> ((Var x, t) # U)) = Some \<sigma>2\<close> by auto
 *)
     have "fv_eq_system ((Var x, t) # U) = (fv t) \<union> (fv_eq_system U) \<union> {x}"
       by (metis (no_types, lifting) Un_insert_left Un_insert_right fv.simps(1) fv_eq.elims fv_eq_system.elims insert_is_Un prod.sel(1) prod.sel(2) simple_fold_map_first_elem sup_bot.right_neutral)
-    have "fv_eq_system (\<sigma> · ((Var x, t) # U)) = fv_eq_system ((\<sigma>2 \<circ>s (Var(x := t))) · ((Var x, t) # U))"
+    have "fv_eq_system (\<sigma> \<cdot> ((Var x, t) # U)) = fv_eq_system ((\<sigma>2 \<circ>s (Var(x := t))) \<cdot> ((Var x, t) # U))"
       by (metis \<open>\<sigma> = (\<sigma>2 \<circ>s Var(x := t))\<close>)
-    also have "... = fv (\<sigma>2 · t) \<union> fv_eq_system (\<sigma>2 · (Var(x := t) · U))" sorry
+    also have "... = fv (\<sigma>2 \<cdot> t) \<union> fv_eq_system (\<sigma>2 \<cdot> (Var(x := t) \<cdot> U))" sorry
   (*
-      by (metis "2.prems" False Var_id \<open>\<sigma> = \<sigma>2 \<circ>s Var(x := t)\<close> \<open>unify (Var(x := t) · ((Var x, t) # U)) = Some \<sigma>2\<close> fun_upd_same fv.simps(1) option.inject scomp_sapply singletonI unify.simps(1))
+      by (metis "2.prems" False Var_id \<open>\<sigma> = \<sigma>2 \<circ>s Var(x := t)\<close> \<open>unify (Var(x := t) \<cdot> ((Var x, t) # U)) = Some \<sigma>2\<close> fun_upd_same fv.simps(1) option.inject scomp_sapply singletonI unify.simps(1))
 *)
     then show ?thesis sorry
 (*
-    by (metis "2.prems" False Var_scomp \<open>\<sigma> = \<sigma>2 \<circ>s Var(x := t)\<close> \<open>unify (Var(x := t) · ((Var x, t) # U)) = Some \<sigma>2\<close> fun_upd_same fv.simps(1) option.inject singletonI unify.simps(1))
+    by (metis "2.prems" False Var_scomp \<open>\<sigma> = \<sigma>2 \<circ>s Var(x := t)\<close> \<open>unify (Var(x := t) \<cdot> ((Var x, t) # U)) = Some \<sigma>2\<close> fun_upd_same fv.simps(1) option.inject singletonI unify.simps(1))
 *)
   qed
 next
   case (3 v va y U)
-  then show ?case by (simp add: inf_sup_aci(5) unify.simps(3))
+  then show ?case by (simp add: inf_sup_aci(5))
 next
   case (4 f u g v U)
   have "f = g \<and> length u = length v" using "4.prems" option.discI by (metis unify.simps(4))
   have "unify (zip u v @ U) = Some \<sigma>" using "4.prems" \<open>f = g \<and> length u = length v\<close> by auto
-  obtain "fv_eq_system (\<sigma> · (zip u v @ U)) \<subseteq> fv_eq_system (zip u v @ U)"
+  obtain "fv_eq_system (\<sigma> \<cdot> (zip u v @ U)) \<subseteq> fv_eq_system (zip u v @ U)"
     and "sdom \<sigma> \<subseteq> fv_eq_system (zip u v @ U)"
     and "svran \<sigma> \<subseteq> fv_eq_system (zip u v @ U)"
     using "4.IH" \<open>f = g \<and> length u = length v\<close> \<open>unify (zip u v @ U) = Some \<sigma>\<close> "4.prems" by blast
@@ -1209,8 +1225,8 @@ next
     using \<open>f = g \<and> length u = length v\<close> \<open>svran \<sigma> \<subseteq> fv_eq_system (zip u v @ U)\<close> fv_eq_fun_lists by fastforce
   moreover have "sdom \<sigma> \<subseteq> fv_eq_system ((Fun f u, Fun g v) # U)"
     using \<open>f = g \<and> length u = length v\<close> \<open>sdom \<sigma> \<subseteq> fv_eq_system (zip u v @ U)\<close> fv_eq_fun_lists by fastforce
-  moreover have "fv_eq_system (\<sigma> · ((Fun f u, Fun g v) # U)) \<subseteq> fv_eq_system ((Fun f u, Fun g v) # U)"
-    by (metis \<open>f = g \<and> length u = length v\<close> \<open>fv_eq_system (\<sigma> · (zip u v @ U)) \<subseteq> fv_eq_system (zip u v @ U)\<close> fv_eq_fun_lists fv_sapply_eq_system)
+  moreover have "fv_eq_system (\<sigma> \<cdot> ((Fun f u, Fun g v) # U)) \<subseteq> fv_eq_system ((Fun f u, Fun g v) # U)"
+    by (metis \<open>f = g \<and> length u = length v\<close> \<open>fv_eq_system (\<sigma> \<cdot> (zip u v @ U)) \<subseteq> fv_eq_system (zip u v @ U)\<close> fv_eq_fun_lists fv_sapply_eq_system)
   then show ?case using calculation(1) calculation(2) by blast
 qed
 
@@ -1232,7 +1248,7 @@ next
   (* CASE UNIFY *)
 
   case False
-    obtain \<sigma>2 where "unify (Var(x := t) · ((Var x, t) # U)) = Some \<sigma>2"
+    obtain \<sigma>2 where "unify (Var(x := t) \<cdot> ((Var x, t) # U)) = Some \<sigma>2"
       by (metis (no_types, hide_lams) "2.prems" False completeness lifted_comp.elims option.discI soundness1 unifies_sapply_eq_sys unify.simps(2))
     have "\<sigma> = \<sigma>2 \<circ>s (Var(x := t))" sorry
     have "sdom \<sigma>2 \<inter> svran \<sigma>2 = {}" sorry
@@ -1289,7 +1305,7 @@ inductive wf_eqs :: "('f \<Rightarrow> nat) \<Rightarrow> ('f, 'v) equations \<R
 (* 4. (b) *)
 
 lemma wf_term_sapply[simp]:
-"\<lbrakk> wf_term arity t; wf_subst arity \<sigma> \<rbrakk> \<Longrightarrow> wf_term arity (\<sigma> · t)"
+"\<lbrakk> wf_term arity t; wf_subst arity \<sigma> \<rbrakk> \<Longrightarrow> wf_term arity (\<sigma> \<cdot> t)"
 proof (induction t)
 case (Var x)
   then show ?case by (simp add: wf_subst_def)
@@ -1356,22 +1372,22 @@ lemma wf_subst_unify:
 proof (induction U arbitrary: \<sigma> rule: unify.induct)
   case 1
 then show ?case
-  by (metis empty_subsetI option.inject unify.simps(1) wf_subst_def wf_term.intros(1))
+  by (metis option.inject unify.simps(1) wf_subst_def wf_term.intros(1))
 next
   case (2 x t U)
   then show ?case
   proof (cases "x \<in> fv t")
     case True
     then show ?thesis
-      by (metis "2.IH"(2) "2.prems" lemma_3_iv list.discI list.sel(3) option.discI unify.simps(2) wf_eqs.cases)
+      by (metis "2.IH"(2) "2.prems" list.discI list.sel(3) option.discI unify.simps(2) wf_eqs.cases)
   next
     case False
-    obtain \<tau> where "unify (Var(x := t) · ((Var x, t) # U)) = Some \<tau>" sorry
-    have "wf_eqs arity (Var(x := t) · U)" sorry
+    obtain \<tau> where "unify (Var(x := t) \<cdot> ((Var x, t) # U)) = Some \<tau>" sorry
+    have "wf_eqs arity (Var(x := t) \<cdot> U)" sorry
     
 (*
 
- \<lbrakk>\<And>\<sigma>. \<lbrakk>unify (Var(x := t) · U) = Some \<sigma>; wf_eqs arity (Var(x := t) · U)\<rbrakk>
+ \<lbrakk>\<And>\<sigma>. \<lbrakk>unify (Var(x := t) \<cdot> U) = Some \<sigma>; wf_eqs arity (Var(x := t) \<cdot> U)\<rbrakk>
 
  unify ((Var x, t) # U) = Some \<sigma>;
      wf_eqs arity ((Var x, t) # U); x \<notin> fv t\<rbrakk>
