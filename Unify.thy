@@ -1295,12 +1295,47 @@ next
   (* CASE UNIFY *)
 
   case False
-    obtain \<sigma>2 where "unify (Var(x := t) \<cdot> ((Var x, t) # U)) = Some \<sigma>2"
-      by (metis (no_types, hide_lams) "2.prems" False completeness lifted_comp.elims option.discI soundness1 unifies_sapply_eq_sys unify.simps(2))
-    have "\<sigma> = \<sigma>2 \<circ>s (Var(x := t))" sorry
-    have "sdom \<sigma>2 \<inter> svran \<sigma>2 = {}" sorry
-
-    then show ?thesis sorry
+    obtain \<tau> where "unify (Var(x := t) \<cdot> U) = Some \<tau>"
+      by (metis (no_types, hide_lams) "2.prems" False lifted_comp.elims option.discI unify.simps(2))
+    have "\<sigma> = \<tau> \<circ>s (Var(x := t))"
+      using "2.prems" False \<open>unify (Var(x := t) \<cdot> U) = Some \<tau>\<close> by auto
+    have "sdom \<tau> \<inter> svran \<tau> = {}"
+      using "2"(1) False \<open>unify (Var(x := t) \<cdot> U) = Some \<tau>\<close> by blast
+    have "svran \<tau> \<subseteq> fv_eq_system (Var(x := t) \<cdot> U)"
+      using \<open>unify (Var(x := t) \<cdot> U) = Some \<tau>\<close> lemma_3_i_iii by blast
+    have "x \<notin> svran \<tau>"
+      by (meson False \<open>svran \<tau> \<subseteq> fv_eq_system (Var(x := t) \<cdot> U)\<close> prelim_unify_equations subsetCE)
+    have "sdom \<sigma> \<inter> svran \<sigma> = {}"
+    proof (rule ccontr)
+      assume "\<not> (sdom \<sigma> \<inter> svran \<sigma> = {})"
+      show "False"
+      proof -
+        obtain z where "z \<in> sdom \<sigma>" and "z \<in> svran \<sigma>"
+          using \<open>sdom \<sigma> \<inter> svran \<sigma> \<noteq> {}\<close> by blast
+        have "z \<in> sdom \<tau> \<union> {x}"
+          using \<open>\<sigma> = \<tau> \<circ>s Var(x := t)\<close> \<open>z \<in> sdom \<sigma>\<close> sdom_scomp by auto
+        have "z \<in> svran \<tau> \<union> fv t"
+          by (metis False \<open>\<sigma> = \<tau> \<circ>s Var(x := t)\<close> \<open>z \<in> svran \<sigma>\<close> fv.simps(1) singletonI subsetCE svran_scomp svran_single_non_trivial)
+        have "z \<in> sdom \<tau>"
+          using False \<open>x \<notin> svran \<tau>\<close> \<open>z \<in> sdom \<tau> \<union> {x}\<close> \<open>z \<in> svran \<tau> \<union> fv t\<close> by blast
+        obtain y where "y \<in> sdom \<sigma>" and "z \<in> fv (\<sigma> \<cdot> (Var y))" sorry
+        then show ?thesis
+        proof (cases "y = x")
+          case True
+          have "\<sigma> \<cdot> (Var y) = \<tau> \<cdot> t" by (simp add: True \<open>\<sigma> = \<tau> \<circ>s Var(x := t)\<close>)
+          have "z \<in> fv (\<tau> \<cdot> t)" using \<open>\<sigma> \<cdot> Var y = \<tau> \<cdot> t\<close> \<open>z \<in> fv (\<sigma> \<cdot> Var y)\<close> by auto
+          then show ?thesis
+            by (meson Diff_disjoint UnE \<open>sdom \<tau> \<inter> svran \<tau> = {}\<close> \<open>z \<in> sdom \<tau>\<close> disjoint_iff_not_equal fv_sapply_sdom_svran)
+        next
+          case False
+          have "\<sigma> \<cdot> (Var y) = \<tau> \<cdot> (Var y)" by (simp add: False \<open>\<sigma> = \<tau> \<circ>s Var(x := t)\<close>)
+          have "z \<in> svran \<tau>"
+            by (metis (mono_tags, hide_lams) Diff_iff UnE \<open>\<sigma> = \<tau> \<circ>s Var(x := t)\<close> \<open>z \<in> fv (\<sigma> \<cdot> Var y)\<close> \<open>z \<in> sdom \<tau>\<close> fv_sapply_sdom_svran sapply_scomp_distrib)
+          then show ?thesis using \<open>sdom \<tau> \<inter> svran \<tau> = {}\<close> \<open>z \<in> sdom \<tau>\<close> by blast
+        qed
+      qed
+    qed
+    then show ?thesis by blast
   qed
 next
 case (3 v va y U)
