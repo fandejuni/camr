@@ -15,6 +15,10 @@ fun fv :: "('f , 'v) term \<Rightarrow> 'v set" where
 | "fv (Fun f l) = fold (\<union>) (map fv l) {}"
 (* | "fv (Fun f l) = (\<Union>x\<in>(set l).(fv x))" *)
 
+lemma equi_def:
+  "fv (Fun f l) = (\<Union>x\<in>(set l).(fv x))"
+  by (metis Sup_set_fold fv.simps(2) set_map)
+
 value "fv (Fun (1 :: nat) [Var (0 :: nat), Var 1, Fun 2 [Var 2, Fun 3 [Var 5]]])"
 
 type_synonym ('f, 'v) subst = "'v \<Rightarrow> ('f, 'v) term"
@@ -1121,6 +1125,36 @@ proof -
     using \<open>fv_eq_system ((Fun f u, Fun g v) # U) = fv_eq (Fun f u, Fun g v) \<union> fv_eq_system U\<close> calculation by blast
 qed
 
+lemma fv_subst_term:
+  "fv (Var(x := t) \<cdot> tt) \<subseteq> fv t \<union> fv tt"
+  apply (auto simp add: Diff_subset UnE UnI1 contra_subsetD fun_upd_idem_iff subsetI)
+  by (metis (full_types) empty_subsetI fv.simps(1) insert_subset subsetCE)
+
+lemma fv_subst_eq:
+  "fv_eq (Var(x := t) \<cdot> eq) \<subseteq> fv t \<union> fv_eq eq"
+  apply (auto simp add: fv_eq.elims fv_subst_term le_supI1 le_supI2 sup_assoc sup_left_commute)
+   apply (metis (mono_tags, hide_lams) UnI1 fv.simps(1) insert_iff insert_is_Un)+
+  done
+
+lemma fv_subst_eqs:
+  "fv_eq_system (Var(x := t) \<cdot> U) \<subseteq> fv t \<union> fv_eq_system U"
+proof (induction U)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons a U)
+  have "fv_eq_system (Var(x := t) \<cdot> (a # U)) = fv_eq (Var(x := t) \<cdot> a) \<union> fv_eq_system (Var(x := t) \<cdot> U)"
+    by (metis fv_eq_system.elims list.simps(9) sapply_eq_system.elims simple_fold_map_first_elem)
+  also have "... \<subseteq> fv t \<union> fv_eq a \<union> fv t \<union> fv_eq_system U"
+    apply -
+    apply (auto simp add: Cons.IH Un_upper1 fv_subst_eq inf_sup_aci(5) subset_trans)
+      apply (metis Cons.IH UnE fv_eq_system.simps map_map sapply_eq_system.elims subsetCE)
+     apply (metis (full_types) fv.simps(1) singletonD)+
+    done
+  then show ?case
+    by (metis (no_types, lifting) calculation fv_eq_system.elims inf_sup_aci(5) simple_fold_map_first_elem sup_assoc sup_left_idem)
+qed
+
 lemma lemma_3_i_iii:
   "unify U = Some \<sigma> \<Longrightarrow> fv_eq_system (\<sigma> \<cdot> U) \<subseteq> fv_eq_system U \<and> sdom \<sigma> \<subseteq> fv_eq_system U \<and> svran \<sigma> \<subseteq> fv_eq_system U"
 proof (induction arbitrary: \<sigma> rule: unify.induct)
@@ -1175,40 +1209,53 @@ next
 
 (* CASE UNIFY *)
 
+(*
     obtain \<sigma>2 where "unify (Var(x := t) \<cdot> ((Var x, t) # U)) = Some \<sigma>2"
       by (metis (no_types, hide_lams) "2.prems" False completeness lifted_comp.elims option.discI soundness1 unifies_sapply_eq_sys unify.simps(2))
-    have "\<sigma> = \<sigma>2 \<circ>s (Var(x := t))" sorry
-(*
-      by (metis "2.prems" False \<open>unify (Var(x := t) \<cdot> ((Var x, t) # U)) = Some \<sigma>2\<close> lifted_comp.simps(2) option.inject unify.simps(2))
 *)
-    have "fv_eq_system (Var(x := t) \<cdot> U) \<subseteq> fv(t) \<union> fv_eq_system(U)"
-(* TODO *)
-      by (smt UN_iff UnI1 fun_upd_apply fv.simps(1) fv_sapply_eq_system singletonD subsetCE subsetI sup.cobounded2)
-    obtain "fv_eq_system (\<sigma> \<cdot> Var(x := t) \<cdot> U) \<subseteq> fv_eq_system (Var(x := t) \<cdot> U) \<and> sdom \<sigma> \<subseteq> fv_eq_system (Var(x := t) \<cdot> U) \<and> svran \<sigma> \<subseteq> fv_eq_system (Var(x := t) \<cdot> U)" sorry
-(*
-      using "2.IH"(1) "2.prems" False by blast
-*)
-    have "fv_eq_system (\<sigma>2 \<cdot> (Var(x := t) \<cdot> U)) \<subseteq> fv(t) \<union> fv_eq_system(U)" sorry
-(*
-      by (smt "2.IH"(1) "2.prems" False \<open>\<sigma> = \<sigma>2 \<circ>s Var(x := t)\<close> \<open>fv_eq_system (Var(x := t) \<cdot> U) \<subseteq> fv t \<union> fv_eq_system U\<close> lifted_comp.elims option.distinct(1) option.inject sapply_scomp_distrib_eq_system sup.absorb_iff2 sup.coboundedI1 unify.simps(2))
-      using "2.prems" \<open>\<And>thesis. (fv_eq_system (\<sigma> \<cdot> Var(x := t) \<cdot> U) \<subseteq> fv_eq_system (Var(x := t) \<cdot> U) \<and> sdom \<sigma> \<subseteq> fv_eq_system (Var(x := t) \<cdot> U) \<and> svran \<sigma> \<subseteq> fv_eq_system (Var(x := t) \<cdot> U) \<Longrightarrow> thesis) \<Longrightarrow> thesis\<close> \<open>fv_eq_system (Var(x := t) \<cdot> U) \<subseteq> fv t \<union> fv_eq_system U\<close> \<open>unify (Var(x := t) \<cdot> ((Var x, t) # U)) = Some \<sigma>2\<close> by auto
-*)
-    have "sdom \<sigma>2 \<subseteq> fv t \<union> fv_eq_system U" sorry
-(*
-      using "2.prems" \<open>\<And>thesis. (fv_eq_system (\<sigma> \<cdot> Var(x := t) \<cdot> U) \<subseteq> fv_eq_system (Var(x := t) \<cdot> U) \<and> sdom \<sigma> \<subseteq> fv_eq_system (Var(x := t) \<cdot> U) \<and> svran \<sigma> \<subseteq> fv_eq_system (Var(x := t) \<cdot> U) \<Longrightarrow> thesis) \<Longrightarrow> thesis\<close> \<open>fv_eq_system (Var(x := t) \<cdot> U) \<subseteq> fv t \<union> fv_eq_system U\<close> \<open>unify (Var(x := t) \<cdot> ((Var x, t) # U)) = Some \<sigma>2\<close> by auto
-*)
-    have "fv_eq_system ((Var x, t) # U) = (fv t) \<union> (fv_eq_system U) \<union> {x}"
-      by (metis (no_types, lifting) Un_insert_left Un_insert_right fv.simps(1) fv_eq.elims fv_eq_system.elims insert_is_Un prod.sel(1) prod.sel(2) simple_fold_map_first_elem sup_bot.right_neutral)
-    have "fv_eq_system (\<sigma> \<cdot> ((Var x, t) # U)) = fv_eq_system ((\<sigma>2 \<circ>s (Var(x := t))) \<cdot> ((Var x, t) # U))"
-      by (metis \<open>\<sigma> = (\<sigma>2 \<circ>s Var(x := t))\<close>)
-    also have "... = fv (\<sigma>2 \<cdot> t) \<union> fv_eq_system (\<sigma>2 \<cdot> (Var(x := t) \<cdot> U))" sorry
-  (*
-      by (metis "2.prems" False Var_id \<open>\<sigma> = \<sigma>2 \<circ>s Var(x := t)\<close> \<open>unify (Var(x := t) \<cdot> ((Var x, t) # U)) = Some \<sigma>2\<close> fun_upd_same fv.simps(1) option.inject scomp_sapply singletonI unify.simps(1))
-*)
-    then show ?thesis sorry
-(*
-    by (metis "2.prems" False Var_scomp \<open>\<sigma> = \<sigma>2 \<circ>s Var(x := t)\<close> \<open>unify (Var(x := t) \<cdot> ((Var x, t) # U)) = Some \<sigma>2\<close> fun_upd_same fv.simps(1) option.inject singletonI unify.simps(1))
-*)
+
+    obtain \<tau> where "unify (Var(x := t) \<cdot> U) = Some \<tau>"
+      using "2.prems" False by force
+    also obtain "fv_eq_system (\<tau> \<cdot> Var(x := t) \<cdot> U) \<subseteq> fv_eq_system (Var(x := t) \<cdot> U)"
+      and "sdom \<tau> \<subseteq> fv_eq_system (Var(x := t) \<cdot> U)"
+      and "svran \<tau> \<subseteq> fv_eq_system (Var(x := t) \<cdot> U)"
+      using "2.IH"(1) False calculation by blast
+    have "\<sigma> = \<tau> \<circ>s (Var(x := t))"
+      using "2.prems" False calculation by auto
+    have "fv_eq_system ((Var(x := t)) \<cdot> U) \<subseteq> fv t \<union> fv_eq_system U" by (meson fv_subst_eqs)
+    obtain "fv_eq_system (\<tau> \<cdot> (Var(x := t) \<cdot> U)) \<subseteq> fv t \<union> fv_eq_system U"
+      and "sdom \<tau> \<subseteq> fv t \<union> fv_eq_system U"
+      and "svran \<tau> \<subseteq> fv t \<union> fv_eq_system U"
+      using \<open>\<And>thesis. (\<lbrakk>fv_eq_system (\<tau> \<cdot> Var(x := t) \<cdot> U) \<subseteq> fv_eq_system (Var(x := t) \<cdot> U); sdom \<tau> \<subseteq> fv_eq_system (Var(x := t) \<cdot> U); svran \<tau> \<subseteq> fv_eq_system (Var(x := t) \<cdot> U)\<rbrakk> \<Longrightarrow> thesis) \<Longrightarrow> thesis\<close> \<open>fv_eq_system (Var(x := t) \<cdot> U) \<subseteq> fv t \<union> fv_eq_system U\<close> subset_trans by auto
+    have "fv_eq_system ((Var x, t) # U) = fv t \<union> fv_eq_system U \<union> {x}"
+      by (metis (no_types, lifting) fv.simps(1) fv_eq.elims fv_eq_system.elims inf_sup_aci(5) prod.sel(1) prod.sel(2) simple_fold_map_first_elem sup_assoc)
+    have "fv_eq_system (\<sigma> \<cdot> ((Var x, t) # U)) = fv_eq_system ((\<tau> \<circ>s Var(x := t)) \<cdot> ((Var x, t) # U))"
+      using \<open>\<sigma> = \<tau> \<circ>s Var(x := t)\<close> by blast
+    have "... = fv_eq ((\<tau> \<circ>s Var(x := t)) \<cdot> (Var x, t)) \<union> fv_eq_system ((\<tau> \<circ>s Var(x := t)) \<cdot> U)"
+      by (metis SUP_union fv_eq_system.elims fv_sapply_eq fv_sapply_eq_system simple_fold_map_first_elem)
+    have "... = fv_eq (\<tau> \<cdot> (Var(x := t) \<cdot> (Var x, t))) \<union> fv_eq_system (\<tau> \<cdot> (Var(x := t) \<cdot> U))"
+      by (metis sapply_scomp_distrib_eq sapply_scomp_distrib_eq_system)
+    have "... = fv (\<tau> \<cdot> t) \<union> fv_eq_system (\<tau> \<cdot> (Var(x := t) \<cdot> U))"
+      using fv_subst_term by fastforce
+    have "sdom \<sigma> \<subseteq> fv_eq_system ((Var x, t) # U)"
+      using \<open>\<sigma> = \<tau> \<circ>s Var(x := t)\<close> \<open>fv_eq_system ((Var x, t) # U) = fv t \<union> fv_eq_system U \<union> {x}\<close> \<open>sdom \<tau> \<subseteq> fv t \<union> fv_eq_system U\<close> by auto
+    have "svran \<sigma> \<subseteq> fv_eq_system ((Var x, t) # U)"
+      by (metis (no_types, lifting) False Un_assoc \<open>\<sigma> = \<tau> \<circ>s Var(x := t)\<close> \<open>fv_eq_system ((Var x, t) # U) = fv t \<union> fv_eq_system U \<union> {x}\<close> \<open>svran \<tau> \<subseteq> fv t \<union> fv_eq_system U\<close> fv.simps(1) singletonI subset_Un_eq svran_scomp svran_single_non_trivial)
+
+    have "fv_eq_system (\<sigma> \<cdot> ((Var x, t) # U)) = fv (\<tau> \<cdot> t) \<union> fv_eq_system (\<tau> \<cdot> (Var(x := t) \<cdot> U))"
+      using \<open>fv_eq (\<tau> \<cdot> Var(x := t) \<cdot> (Var x, t)) \<union> fv_eq_system (\<tau> \<cdot> Var(x := t) \<cdot> U) = fv (\<tau> \<cdot> t) \<union> fv_eq_system (\<tau> \<cdot> Var(x := t) \<cdot> U)\<close> \<open>fv_eq (\<tau> \<circ>s Var(x := t) \<cdot> (Var x, t)) \<union> fv_eq_system (\<tau> \<circ>s Var(x := t) \<cdot> U) = fv_eq (\<tau> \<cdot> Var(x := t) \<cdot> (Var x, t)) \<union> fv_eq_system (\<tau> \<cdot> Var(x := t) \<cdot> U)\<close> \<open>fv_eq_system (\<sigma> \<cdot> ((Var x, t) # U)) = fv_eq_system (\<tau> \<circ>s Var(x := t) \<cdot> ((Var x, t) # U))\<close> \<open>fv_eq_system (\<tau> \<circ>s Var(x := t) \<cdot> ((Var x, t) # U)) = fv_eq (\<tau> \<circ>s Var(x := t) \<cdot> (Var x, t)) \<union> fv_eq_system (\<tau> \<circ>s Var(x := t) \<cdot> U)\<close> by blast
+    have "fv_eq_system (\<sigma> \<cdot> ((Var x, t) # U)) \<subseteq> fv (\<tau> \<cdot> t) \<union> fv t \<union> fv_eq_system U"
+      using \<open>fv_eq_system (\<sigma> \<cdot> ((Var x, t) # U)) = fv (\<tau> \<cdot> t) \<union> fv_eq_system (\<tau> \<cdot> Var(x := t) \<cdot> U)\<close> \<open>fv_eq_system (\<tau> \<cdot> Var(x := t) \<cdot> U) \<subseteq> fv t \<union> fv_eq_system U\<close> by auto
+    have "fv (\<tau> \<cdot> t) \<subseteq> (fv t - sdom \<tau>) \<union> svran \<tau>"
+      by (meson fv_sapply_sdom_svran subsetI)
+    have "svran \<tau> \<subseteq> fv t \<union> fv_eq_system U"
+      using \<open>svran \<tau> \<subseteq> fv t \<union> fv_eq_system U\<close> by linarith
+    have "fv (\<tau> \<cdot> t) \<subseteq> (fv t - sdom \<tau>) \<union> fv t \<union> fv_eq_system U"
+      using \<open>fv (\<tau> \<cdot> t) \<subseteq> fv t - sdom \<tau> \<union> svran \<tau>\<close> \<open>svran \<tau> \<subseteq> fv t \<union> fv_eq_system U\<close> by blast
+    have "fv (\<tau> \<cdot> t) \<subseteq>  fv t \<union> fv_eq_system U"
+      using \<open>fv (\<tau> \<cdot> t) \<subseteq> fv t - sdom \<tau> \<union> fv t \<union> fv_eq_system U\<close> by auto
+    then show ?thesis
+      using \<open>fv_eq_system ((Var x, t) # U) = fv t \<union> fv_eq_system U \<union> {x}\<close> \<open>fv_eq_system (\<sigma> \<cdot> ((Var x, t) # U)) \<subseteq> fv (\<tau> \<cdot> t) \<union> fv t \<union> fv_eq_system U\<close> \<open>sdom \<sigma> \<subseteq> fv_eq_system ((Var x, t) # U)\<close> \<open>svran \<sigma> \<subseteq> fv_eq_system ((Var x, t) # U)\<close> by blast
   qed
 next
   case (3 v va y U)
