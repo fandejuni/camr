@@ -189,6 +189,14 @@ fun fv_eq :: "('f , 'v) equation \<Rightarrow> 'v set" where
 fun fv_eq_system :: "('f, 'v) equations \<Rightarrow> 'v set" where
   "fv_eq_system l = fold (\<union>) (map fv_eq l) {}"
 
+lemma fv_eq_system_def_equiv_1:
+  "fv_eq_system l = (\<Union>x\<in>(set l). fv_eq x)"
+  by (metis Sup_set_fold fv_eq_system.elims set_map)
+
+lemma fv_eq_system_def_equiv:
+  "fv_eq_system (eq # U) = (fv_eq eq) \<union> (fv_eq_system U)"
+  by (metis UN_insert fv_eq_system_def_equiv_1 list.simps(15))
+
 fun sapply_eq :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equation \<Rightarrow> ('f, 'v) equation"
   where
   "sapply_eq \<sigma> eq = (sapply \<sigma> (fst eq), sapply \<sigma> (snd eq))"
@@ -198,6 +206,9 @@ fun sapply_eq_system :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equations \<Right
   where
 "sapply_eq_system \<sigma> l = map (sapply_eq \<sigma>) l"
 adhoc_overloading SAPPLY_SYMBOL sapply_eq_system
+
+lemma sapply_eq_system_equiv_def:
+  "sapply_eq_system \<sigma> (eq # U) = (sapply_eq \<sigma> eq) # (sapply_eq_system \<sigma> U)" by simp
 
 lemma fv_sapply_eq[simp]: "fv_eq (\<sigma> \<cdot> eq) = (\<Union> x \<in> (fv_eq eq). fv (\<sigma> x))"
   by simp
