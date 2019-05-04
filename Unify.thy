@@ -12,12 +12,18 @@ datatype ('f , 'v) "term" = Var 'v | Fun 'f "('f, 'v) term list"
 
 fun fv :: "('f , 'v) term \<Rightarrow> 'v set" where
   "fv (Var x) = {x}"
-| "fv (Fun f l) = fold (\<union>) (map fv l) {}"
-(* | "fv (Fun f l) = (\<Union>x\<in>(set l).(fv x))" *)
+(* | "fv (Fun f l) = fold (\<union>) (map fv l) {}" *)
+| "fv (Fun f l) = (\<Union>x\<in>(set l).(fv x))"
 
+lemma equi_def_fv:
+  "fv (Fun f l) = fold (\<union>) (map fv l) {}"
+  by (metis Sup_set_fold fv.simps(2) set_map)
+
+(*
 lemma equi_def:
   "fv (Fun f l) = (\<Union>x\<in>(set l).(fv x))"
   by (metis Sup_set_fold fv.simps(2) set_map)
+*)
 
 value "fv (Fun (1 :: nat) [Var (0 :: nat), Var 1, Fun 2 [Var 2, Fun 3 [Var 5]]])"
 
@@ -40,8 +46,7 @@ proof (induction t)
   then show ?case by simp
 next
   case (Fun x1a x2)
-  then have "fv (\<sigma> \<cdot> Fun x1a x2) = fold (\<union>) (map (fv \<circ> (sapply \<sigma>)) x2) {}" by simp
-  also have "... = (\<Union>y\<in>(set x2).((fv \<circ> (sapply \<sigma>)) y))" by (metis Sup_set_fold set_map)
+  have "fv (\<sigma> \<cdot> Fun x1a x2) = (\<Union>y\<in>(set x2).((fv \<circ> (sapply \<sigma>)) y))" by simp
   also have "... =  (\<Union>y\<in>(set x2). (\<Union>yy\<in>fv y. fv (\<sigma> yy)))" using Fun.IH by simp
   also have "... = (\<Union>x\<in>fv (Fun x1a x2). fv (\<sigma> x))"
     by (metis Sup_set_fold UN_UN_flatten fv.simps(2) set_map)
@@ -56,7 +61,6 @@ lemma sapply_cong:
   using assms
   apply (induction t)
    apply auto
-  apply (metis Sup_set_fold UnI1 Union_insert insert_absorb list.map(2) list.set(2) set_map)
   done
 
 fun scomp :: "('f, 'v) subst \<Rightarrow> ('f, 'v) subst \<Rightarrow> ('f, 'v) subst" (infixl "\<circ>s" 75)
@@ -134,8 +138,7 @@ lemma fold_union_map_rev[elim]:
   "\<lbrakk> x \<in> (\<Union>y\<in>(set l).f y) \<rbrakk> \<Longrightarrow>  x \<in> (fold (\<union>) (map f l) {})"
   by (metis Sup_set_fold set_map)
 
-lemma fv_fun[simp]: "fv (Fun f l) = (\<Union> x \<in> (set l). fv x)"
-  by (metis Sup_set_fold fv.simps(2) set_map)
+lemma fv_fun[simp]: "fv (Fun f l) = (\<Union> x \<in> (set l). fv x)" by simp
 
 lemma fv_sapply_sdom_svran[simp]:
   assumes "x \<in> fv (\<sigma> \<cdot> t)"
@@ -488,7 +491,7 @@ termination
       apply (simp add: measure_unify measure_simp)+
    apply (simp add: fold_plus_sum_list_rev measure_fun)
   apply (simp add: measure_fun)
-  done
+  by (metis (mono_tags, lifting) Sup_set_fold list.set_map)
 
 (* 3. (b) *)
 
@@ -1074,12 +1077,11 @@ proof (induction U)
   then show ?case by simp
 next
   case (Cons a U)
-  have "fv_eq (Fun f ((fst a) # (map fst U)), Fun g ((snd a) # (map snd U))) =
-  (fold (\<union>) (map fv ((fst a) # (map fst U))) {}) \<union> (fold (\<union>) (map fv ((snd a) # (map snd U))) {})" by auto
-  also have "... = (fv (fst a)) \<union> (fold (\<union>) (map fv (map fst U)) {}) \<union> (fv (snd a)) \<union> (fold (\<union>) (map fv (map snd U)) {})"
-    by (metis (no_types, lifting) simple_fold_map_first_elem sup_assoc)
+  have "fv_eq (Fun f ((fst a) # (map fst U)), Fun g ((snd a) # (map snd U))) = (fv (fst a)) \<union> (fold (\<union>) (map fv (map fst U)) {}) \<union> (fv (snd a)) \<union> (fold (\<union>) (map fv (map snd U)) {})"
+    by (metis (no_types, lifting) equi_def_fv fst_conv fv_eq.elims simple_fold_map_first_elem snd_conv sup_assoc)
   also have "... = (fv_eq a) \<union> (fold (\<union>) (map fv (map fst U)) {}) \<union> (fold (\<union>) (map fv (map snd U)) {})" by auto
-  have "(fold (\<union>) (map fv (map fst U)) {}) \<union> (fold (\<union>) (map fv (map snd U)) {}) = fv_eq (Fun f (map fst U), Fun g (map snd U))" by simp
+  have "(fold (\<union>) (map fv (map fst U)) {}) \<union> (fold (\<union>) (map fv (map snd U)) {}) = fv_eq (Fun f (map fst U), Fun g (map snd U))"
+    by (metis equi_def_fv fst_conv fv_eq.elims snd_conv)
   have "fv_eq (Fun f (map fst U), Fun g (map snd U)) = fv_eq_system U" using Cons.IH by blast
   then show ?case
     by (metis \<open>fold (\<union>) (map fv (map fst U)) {} \<union> fold (\<union>) (map fv (map snd U)) {} = fv_eq (Fun f (map fst U), Fun g (map snd U))\<close> \<open>fv (fst a) \<union> fold (\<union>) (map fv (map fst U)) {} \<union> fv (snd a) \<union> fold (\<union>) (map fv (map snd U)) {} = fv_eq a \<union> fold (\<union>) (map fv (map fst U)) {} \<union> fold (\<union>) (map fv (map snd U)) {}\<close> calculation fv_eq_system.elims list.simps(9) simple_fold_map_first_elem sup_assoc)
@@ -1107,7 +1109,7 @@ lemma fv_eq_fun_lists:
 proof -
   have "fv_eq_system ((Fun f u, Fun g v) # U) = (fv_eq (Fun f u, Fun g v)) \<union> (fv_eq_system U)"
     by (metis (no_types, lifting) Sup_set_fold UN_insert fv_eq_system.elims list.simps(15) set_map)
-  have "fv_eq (Fun f u, Fun g v) = fv_eq_system (zip u v)" using assms fv_fun_simple_alternative by auto
+  have "fv_eq (Fun f u, Fun g v) = fv_eq_system (zip u v)" using assms fv_fun_simple_alternative by fastforce
   also have "fv_eq_system (zip u v) \<union> (fv_eq_system U) = fv_eq_system (zip u v @ U)" by (meson fv_union)
   then show ?thesis
     using \<open>fv_eq_system ((Fun f u, Fun g v) # U) = fv_eq (Fun f u, Fun g v) \<union> fv_eq_system U\<close> calculation by blast

@@ -153,4 +153,21 @@ lemma msg_of_term_inject:
   "\<lbrakk> wf_term arity t1; wf_term arity t2 \<rbrakk> \<Longrightarrow> msg_of_term t1 = msg_of_term t2 \<longleftrightarrow> t1 = t2 "
   using embed_msg_of_term by fastforce
 
+(* 5. (d) *)
+
+fun m_fv :: "msg \<Rightarrow> string set" where
+
+
+datatype msg =
+  "m_fv (
+(*
+    Cons string
+    | Var string
+    | Hash msg
+    | Pair msg msg
+    | Sym_encrypt msg msg
+    | Public_key_encrypt msg msg
+    | Signature msg msg
+*)
+
 end
