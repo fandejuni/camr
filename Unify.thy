@@ -1318,11 +1318,21 @@ next
           by (metis False \<open>\<sigma> = \<tau> \<circ>s Var(x := t)\<close> \<open>z \<in> svran \<sigma>\<close> fv.simps(1) singletonI subsetCE svran_scomp svran_single_non_trivial)
         have "z \<in> sdom \<tau>"
           using False \<open>x \<notin> svran \<tau>\<close> \<open>z \<in> sdom \<tau> \<union> {x}\<close> \<open>z \<in> svran \<tau> \<union> fv t\<close> by blast
-        obtain y where "y \<in> sdom \<sigma>" and "z \<in> fv (\<sigma> \<cdot> (Var y))" sorry
+        have "\<exists>y. y \<in> sdom \<sigma> \<and> z \<in> fv (\<sigma> \<cdot> (Var y))"
+        proof -
+          have "z \<in> (\<Union>t\<in>(sran \<sigma>).(fv t))" using \<open>z \<in> svran \<sigma>\<close> by auto
+          then obtain t where "t \<in> sran \<sigma>" and "z \<in> fv t" by blast
+          then obtain y where "y \<in> sdom \<sigma>" and "t = \<sigma> y" by auto
+          then have "z \<in> fv (\<sigma> \<cdot> (Var y))" using \<open>z \<in> fv t\<close> by auto
+          then have "y \<in> sdom \<sigma> \<and> z \<in> fv (\<sigma> \<cdot> (Var y))" using \<open>y \<in> sdom \<sigma>\<close> by blast
+          show ?thesis using \<open>y \<in> sdom \<sigma>\<close> \<open>z \<in> fv (\<sigma> \<cdot> Var y)\<close> by auto
+        qed
+        then obtain y where "y \<in> sdom \<sigma>" and "z \<in> fv (\<sigma> \<cdot> (Var y))" by blast
         then show ?thesis
         proof (cases "y = x")
           case True
-          have "\<sigma> \<cdot> (Var y) = \<tau> \<cdot> t" by (simp add: True \<open>\<sigma> = \<tau> \<circ>s Var(x := t)\<close>)
+          have "\<sigma> \<cdot> (Var y) = \<tau> \<cdot> t"
+            by (simp add: True \<open>\<sigma> = \<tau> \<circ>s Var(x := t)\<close>)
           have "z \<in> fv (\<tau> \<cdot> t)" using \<open>\<sigma> \<cdot> Var y = \<tau> \<cdot> t\<close> \<open>z \<in> fv (\<sigma> \<cdot> Var y)\<close> by auto
           then show ?thesis
             by (meson Diff_disjoint UnE \<open>sdom \<tau> \<inter> svran \<tau> = {}\<close> \<open>z \<in> sdom \<tau>\<close> disjoint_iff_not_equal fv_sapply_sdom_svran)
