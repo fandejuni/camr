@@ -602,18 +602,6 @@ next
     by (metis (no_types, lifting) append_is_Nil_conv hd_append2 list.sel(1) list.sel(3) tl_append2 unifiess.simps)
 qed
 
-(*
-lemma test:
-  "\<lbrakk>length u = length v; unifiess \<sigma> (zip u v)\<rbrakk> \<Longrightarrow> map (sapply \<sigma>) u = map (sapply \<sigma>) v"
-proof (induction u v rule: list_induct2)
-  case Nil
-  then show ?case sorry
-next
-  case (Cons x xs y ys)
-  then show ?case sorry
-qed
-*)
-
 lemma test:
   assumes "unifiess \<sigma> u"
   shows "map (sapply \<sigma>) (map fst u) = map (sapply \<sigma>) (map snd u)"
@@ -1459,6 +1447,18 @@ next
     by (metis (no_types, lifting) append_Cons list.sel(3) self_append_conv2 wf_eqs.cases wf_eqs.intros(2))
 qed
 
+lemma wf_eqs_subst:
+  "wf_subst ar \<sigma> \<and> wf_eqs ar U \<Longrightarrow> wf_eqs ar (\<sigma> \<cdot> U)"
+proof (induction U)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons a U)
+  have "wf_eqs ar (\<sigma> \<cdot> U)" using Cons.IH Cons.prems wf_eqs.cases by fastforce
+  moreover have "wf_eq ar (\<sigma> \<cdot> a)" by (metis Cons.prems fst_conv list.discI list.sel(1) sapply_eq.simps snd_conv wf_eq_def wf_eqs.cases wf_term_sapply)
+  then show ?case using calculation wf_eqs.simps by fastforce
+qed
+
 lemma wf_subst_unify:
   "unify U = Some \<sigma> \<and> wf_eqs arity U \<Longrightarrow> wf_subst arity \<sigma>"
 proof (induction U arbitrary: \<sigma> rule: unify.induct)
@@ -1474,17 +1474,16 @@ next
       by (metis "2.IH"(2) "2.prems" list.discI list.sel(3) option.discI unify.simps(2) wf_eqs.cases)
   next
     case False
-    obtain \<tau> where "unify (Var(x := t) \<cdot> ((Var x, t) # U)) = Some \<tau>" sorry
-    have "wf_eqs arity (Var(x := t) \<cdot> U)" sorry
-    
-(*
-
- \<lbrakk>\<And>\<sigma>. \<lbrakk>unify (Var(x := t) \<cdot> U) = Some \<sigma>; wf_eqs arity (Var(x := t) \<cdot> U)\<rbrakk>
-
- unify ((Var x, t) # U) = Some \<sigma>;
-     wf_eqs arity ((Var x, t) # U); x \<notin> fv t\<rbrakk>
-*)
-    then show ?thesis sorry
+    obtain \<tau> where "unify (Var(x := t) \<cdot> U) = Some \<tau>"
+      by (metis (no_types, hide_lams) "2.prems" False lifted_comp.elims option.discI unify.simps(2))
+    have "\<sigma> = \<tau> \<circ>s (Var(x := t))"
+      using "2.prems" False \<open>unify (Var(x := t) \<cdot> U) = Some \<tau>\<close> by auto
+    have "wf_eq arity (Var x, t)" using "2.prems" wf_eqs.cases by fastforce
+    moreover have "wf_eqs arity U" using "2.prems" wf_eqs.cases by fastforce
+    then have "wf_subst arity (Var(x := t))" using calculation wf_eq_def wf_subst_def wf_term.intros(1) by fastforce
+    then have "wf_eqs arity (Var(x := t) \<cdot> U)" using \<open>wf_eqs arity U\<close> wf_eqs_subst by blast
+    then have "wf_subst arity \<tau>" using "2.IH"(1) False \<open>unify (Var(x := t) \<cdot> U) = Some \<tau>\<close> by blast
+    then show ?thesis using \<open>\<sigma> = \<tau> \<circ>s Var(x := t)\<close> \<open>wf_subst arity (Var(x := t))\<close> wf_subst_scomp by blast
   qed
 next
   case (3 v va y U)
