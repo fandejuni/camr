@@ -21,8 +21,9 @@ inductive deduce :: "msg set \<Rightarrow> msg \<Rightarrow> bool " ( infix "\<t
 
 lemma "{Sym_encrypt m x, x} \<turnstile> m"
   by auto
-lemma "{Pair u1 u2} \<turnstile> Hash (Pair u1 u2)"
-  by auto
+lemma "{Pair u1 u2} \<turnstile> Hash (Pair u2 u1)"
+  apply(rule Hash)
+    by(rule Pair) auto
 lemma "{Sym_encrypt m k, Public_key_encrypt k intruder} \<turnstile> Pair m (Signature m intruder)"
   apply (rule Pair)
    apply (rule Sdec)
@@ -54,7 +55,7 @@ lemma deduce_cut:
 (* 7. (a) *)
 
 datatype constraint = Constraint "msg list" "msg list" "msg" ("((2_/|_)/\<triangleright>_)" [67,67,67]66)
-type_synonym constraint_sys = "constraint set"
+type_synonym constraint_system = "constraint set"
 
 fun c_fv :: "constraint \<Rightarrow> string set" where
   "c_fv (Constraint ms ms' msg) = \<Union>(m_fv ` (set ms \<union> set ms' \<union> {msg}))"
@@ -69,19 +70,19 @@ lemma "c_sapply_comp": "c_sapply \<tau> (c_sapply \<sigma> c) = c_sapply (\<tau>
   using m_sapply_comp
   by (cases c) simp
 
-definition cs_fv :: "constraint_sys \<Rightarrow> string set" where
+definition cs_fv :: "constraint_system \<Rightarrow> string set" where
   "cs_fv cs = \<Union>(c_fv ` cs)"
 
-definition cs_sapply :: "m_subst \<Rightarrow> constraint_sys \<Rightarrow> constraint_sys" where
+definition cs_sapply :: "m_subst \<Rightarrow> constraint_system \<Rightarrow> constraint_system" where
   "cs_sapply \<sigma> cs = c_sapply \<sigma> ` cs"
 
-definition cs_derives :: "constraint_sys \<Rightarrow> bool" where
+definition cs_derives :: "constraint_system \<Rightarrow> bool" where
   "cs_derives cs = (\<forall>c \<in> cs. c_derives c)"
 
 (* 7. (b) *)
 
 type_synonym sol_set = "m_subst set"
-definition sol :: "constraint_sys \<Rightarrow> sol_set" where
+definition sol :: "constraint_system \<Rightarrow> sol_set" where
   "sol cs = {\<sigma> | \<sigma>. cs_derives (cs_sapply \<sigma> cs)}"
 
 lemma "sol_cs_union": "sol (cs \<union> cs') = (sol cs) \<inter> (sol cs')"
@@ -94,7 +95,7 @@ lemma "sol_subst_comp": "\<tau> \<in> sol (cs_sapply \<sigma> cs) \<Longrightarr
 
 (* 7. (c) *)
 
-inductive rer1 :: "constraint \<Rightarrow> m_subst \<Rightarrow> constraint_sys \<Rightarrow> bool" ("_/\<leadsto>\<^sub>1[_]/_" [73,73,73]72) where
+inductive rer1 :: "constraint \<Rightarrow> m_subst \<Rightarrow> constraint_system \<Rightarrow> bool" ("_/\<leadsto>\<^sub>1[_]/_" [73,73,73]72) where
   Unif: "\<not>is_var t \<Longrightarrow> \<exists>u \<in> set M \<union> set A. \<sigma> = the (m_unify [(t, u)])  \<Longrightarrow> rer1 (M | A \<triangleright> t) \<sigma> {}"
 | Comp_Hash: "rer1 (M | A \<triangleright> Hash t) Var {M | A \<triangleright> t}"
 | Comp_Pair: "rer1 (M | A \<triangleright> Pair t1 t2) Var {M | A \<triangleright> t1, M | A \<triangleright> t2}"
@@ -106,10 +107,10 @@ inductive rer1 :: "constraint \<Rightarrow> m_subst \<Rightarrow> constraint_sys
 | Adec: "rer1 ((Public_key_encrypt u intruder # M) | A \<triangleright> t) Var {(u # M) | (Public_key_encrypt u intruder # A) \<triangleright> t}"
 | Ksub: "rer1 ((Public_key_encrypt u (Var x) # M) | A \<triangleright> t) (Var(x := intruder)) {c_sapply (Var(x := intruder)) ((Public_key_encrypt u (Var x) # M) | A \<triangleright> t)}"
 
-inductive rer :: "constraint_sys \<Rightarrow> m_subst \<Rightarrow> constraint_sys \<Rightarrow> bool" ("_/\<leadsto>[_]/_" [73,73,73]72) where
+inductive rer :: "constraint_system \<Rightarrow> m_subst \<Rightarrow> constraint_system \<Rightarrow> bool" ("_/\<leadsto>[_]/_" [73,73,73]72) where
   Context: "rer1 c \<sigma> cs \<Longrightarrow> rer ({c} \<union> cs') \<sigma> (cs \<union> cs_sapply \<sigma> cs')"
 
-inductive rer_star :: "constraint_sys \<Rightarrow> m_subst \<Rightarrow> constraint_sys \<Rightarrow> bool" ("_/\<leadsto>*[_]/_" [73,73,73]72) where
+inductive rer_star :: "constraint_system \<Rightarrow> m_subst \<Rightarrow> constraint_system \<Rightarrow> bool" ("_/\<leadsto>*[_]/_" [73,73,73]72) where
   Refl: "rer_star cs \<sigma> cs"
 | Trans: "rer cs \<sigma> cs' \<Longrightarrow> rer_star cs' \<sigma> cs'' \<Longrightarrow> rer_star cs \<sigma> cs''"
 
@@ -118,10 +119,10 @@ inductive rer_star :: "constraint_sys \<Rightarrow> m_subst \<Rightarrow> constr
 inductive c_simple :: "constraint \<Rightarrow> bool" where
   "c_simple (M | A \<triangleright> (Var _))"
 
-definition cs_simple :: "constraint_sys \<Rightarrow> bool" where
+definition cs_simple :: "constraint_system \<Rightarrow> bool" where
   "cs_simple cs = (\<forall>c \<in> cs. c_simple c)"
 
-definition red :: "constraint_sys \<Rightarrow> m_subst set" where
+definition red :: "constraint_system \<Rightarrow> m_subst set" where
   "red cs = {m_scomp \<tau> \<sigma> | \<tau> \<sigma>. \<exists>cs'. rer_star cs \<sigma> cs' \<and> cs_simple cs' \<and> \<tau> \<in> sol cs'}"
 
 end
