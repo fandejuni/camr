@@ -75,7 +75,7 @@ definition cs_fv :: "constraint_sys \<Rightarrow> string set" where
 definition cs_sapply :: "m_subst \<Rightarrow> constraint_sys \<Rightarrow> constraint_sys" where
   "cs_sapply \<sigma> cs = c_sapply \<sigma> ` cs"
 
-fun cs_derives :: "constraint_sys \<Rightarrow> bool" where
+definition cs_derives :: "constraint_sys \<Rightarrow> bool" where
   "cs_derives cs = (\<forall>c \<in> cs. c_derives c)"
 
 (* 7. (b) *)
@@ -85,11 +85,43 @@ definition sol :: "constraint_sys \<Rightarrow> sol_set" where
   "sol cs = {\<sigma> | \<sigma>. cs_derives (cs_sapply \<sigma> cs)}"
 
 lemma "sol_cs_union": "sol (cs \<union> cs') = (sol cs) \<inter> (sol cs')"
-  unfolding sol_def cs_sapply_def
+  unfolding sol_def cs_sapply_def cs_derives_def
   by (rule set_eqI) auto
 
 lemma "sol_subst_comp": "\<tau> \<in> sol (cs_sapply \<sigma> cs) \<Longrightarrow> \<tau> \<circ>m \<sigma> \<in> sol cs"
-  unfolding sol_def cs_sapply_def
+  unfolding sol_def cs_sapply_def cs_derives_def
   using c_sapply_comp by auto
+
+(* 7. (c) *)
+
+inductive rer1 :: "constraint \<Rightarrow> m_subst \<Rightarrow> constraint_sys \<Rightarrow> bool" ("_/\<leadsto>\<^sub>1[_]/_" [73,73,73]72) where
+  Unif: "\<not>is_var t \<Longrightarrow> \<exists>u \<in> set M \<union> set A. \<sigma> = the (m_unify [(t, u)])  \<Longrightarrow> rer1 (M | A \<triangleright> t) \<sigma> {}"
+| Comp_Hash: "rer1 (M | A \<triangleright> Hash t) Var {M | A \<triangleright> t}"
+| Comp_Pair: "rer1 (M | A \<triangleright> Pair t1 t2) Var {M | A \<triangleright> t1, M | A \<triangleright> t2}"
+| Comp_Sym_encrypt: "rer1 (M | A \<triangleright> Sym_encrypt m k) Var {M | A \<triangleright> m, M | A \<triangleright> k}"
+| Comp_Public_key_encrypt: "rer1 (M | A \<triangleright> Public_key_encrypt m k) Var {M | A \<triangleright> m, M | A \<triangleright> k}"
+| Comp_Signature: "rer1 (M | A \<triangleright> Signature t intruder) Var {M | A \<triangleright> t}"
+| Proj: "rer1 ((Pair u v # M) | A \<triangleright> t) Var {(u # v # M) | (Pair u v # A) \<triangleright> t}"
+| Sdec: "rer1 ((Sym_encrypt u k # M) | A \<triangleright> t) Var {(u # M) | (Sym_encrypt u k # A) \<triangleright> t, M | (Sym_encrypt u k # A) \<triangleright> k}"
+| Adec: "rer1 ((Public_key_encrypt u intruder # M) | A \<triangleright> t) Var {(u # M) | (Public_key_encrypt u intruder # A) \<triangleright> t}"
+| Ksub: "rer1 ((Public_key_encrypt u (Var x) # M) | A \<triangleright> t) (Var(x := intruder)) {c_sapply (Var(x := intruder)) ((Public_key_encrypt u (Var x) # M) | A \<triangleright> t)}"
+
+inductive rer :: "constraint_sys \<Rightarrow> m_subst \<Rightarrow> constraint_sys \<Rightarrow> bool" ("_/\<leadsto>[_]/_" [73,73,73]72) where
+  Context: "rer1 c \<sigma> cs \<Longrightarrow> rer ({c} \<union> cs') \<sigma> (cs \<union> cs_sapply \<sigma> cs')"
+
+inductive rer_star :: "constraint_sys \<Rightarrow> m_subst \<Rightarrow> constraint_sys \<Rightarrow> bool" ("_/\<leadsto>*[_]/_" [73,73,73]72) where
+  Refl: "rer_star cs \<sigma> cs"
+| Trans: "rer cs \<sigma> cs' \<Longrightarrow> rer_star cs' \<sigma> cs'' \<Longrightarrow> rer_star cs \<sigma> cs''"
+
+(* 7. (d) *)
+
+inductive c_simple :: "constraint \<Rightarrow> bool" where
+  "c_simple (M | A \<triangleright> (Var _))"
+
+definition cs_simple :: "constraint_sys \<Rightarrow> bool" where
+  "cs_simple cs = (\<forall>c \<in> cs. c_simple c)"
+
+definition red :: "constraint_sys \<Rightarrow> m_subst set" where
+  "red cs = {m_scomp \<tau> \<sigma> | \<tau> \<sigma>. \<exists>cs'. rer_star cs \<sigma> cs' \<and> cs_simple cs' \<and> \<tau> \<in> sol cs'}"
 
 end

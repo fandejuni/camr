@@ -20,6 +20,9 @@ datatype msg =
     | Public_key_encrypt msg msg
     | Signature msg msg
 
+inductive is_var :: "msg \<Rightarrow> bool" where
+  "is_var (Var _)"
+
 (* 5. (b) *)
 
 datatype symbol =
