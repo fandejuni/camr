@@ -7,7 +7,7 @@ begin
 definition intruder :: msg where
   "intruder = Cons ''intruder''"
 
-inductive deduce :: "msg set \<Rightarrow> msg \<Rightarrow> bool " ( infix "\<turnstile>" 72) where
+inductive deduce :: "msg set \<Rightarrow> msg \<Rightarrow> bool " (infix "\<turnstile>" 72) where
   Ax[intro]: "u \<in> T \<Longrightarrow> T \<turnstile> u"
 | Proj1[intro]: "T \<turnstile> Pair u1 u2 \<Longrightarrow> T \<turnstile> u1"
 | Proj2[intro]: "T \<turnstile> Pair u1 u2 \<Longrightarrow> T \<turnstile> u2"
@@ -95,7 +95,7 @@ lemma "sol_subst_comp": "\<tau> \<in> sol (cs_sapply \<sigma> cs) \<Longrightarr
 
 (* 7. (c) *)
 
-inductive rer1 :: "constraint \<Rightarrow> m_subst \<Rightarrow> constraint_system \<Rightarrow> bool" ("_/\<leadsto>\<^sub>1[_]/_" [73,73,73]72) where
+inductive rer1 :: "constraint \<Rightarrow> m_subst \<Rightarrow> constraint_system \<Rightarrow> bool" ("_/\<leadsto>\<^sub>1[_]/_" [64,64,64]63) where
   Unif: "\<not>is_var t \<Longrightarrow> \<exists>u \<in> set M \<union> set A. \<sigma> = the (m_unify [(t, u)])  \<Longrightarrow> rer1 (M | A \<triangleright> t) \<sigma> {}"
 | Comp_Hash: "rer1 (M | A \<triangleright> Hash t) Var {M | A \<triangleright> t}"
 | Comp_Pair: "rer1 (M | A \<triangleright> Pair t1 t2) Var {M | A \<triangleright> t1, M | A \<triangleright> t2}"
@@ -111,8 +111,8 @@ inductive rer :: "constraint_system \<Rightarrow> m_subst \<Rightarrow> constrai
   Context: "rer1 c \<sigma> cs \<Longrightarrow> rer ({c} \<union> cs') \<sigma> (cs \<union> cs_sapply \<sigma> cs')"
 
 inductive rer_star :: "constraint_system \<Rightarrow> m_subst \<Rightarrow> constraint_system \<Rightarrow> bool" ("_/\<leadsto>*[_]/_" [73,73,73]72) where
-  Refl: "rer_star cs \<sigma> cs"
-| Trans: "rer cs \<sigma> cs' \<Longrightarrow> rer_star cs' \<sigma> cs'' \<Longrightarrow> rer_star cs \<sigma> cs''"
+  Refl: "rer_star cs Var cs"
+| Trans: "rer cs \<sigma> cs' \<Longrightarrow> rer_star cs' \<tau> cs'' \<Longrightarrow> rer_star cs (\<tau> \<circ>m \<sigma>) cs''"
 
 (* 7. (d) *)
 
