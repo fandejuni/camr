@@ -289,6 +289,9 @@ fun m_lifted_comp :: "m_subst option \<Rightarrow> m_subst \<Rightarrow> m_subst
   "m_lifted_comp None \<tau> = None"
 | "m_lifted_comp (Some \<sigma>) \<tau> = Some (\<sigma> \<circ>m \<tau>)"
 
+lemma "m_sapply_comp": "m_sapply \<tau> (m_sapply \<sigma> m) = m_sapply (\<tau> \<circ>m \<sigma>) m"
+  by (induction m) auto
+
 (*
 lemma link_unify_2:
   "m_unify ((Var x, t) # U) = (
