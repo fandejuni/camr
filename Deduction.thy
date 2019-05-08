@@ -60,8 +60,20 @@ type_synonym constraint_system = "constraint set"
 fun c_fv :: "constraint \<Rightarrow> string set" where
   "c_fv (Constraint ms ms' msg) = \<Union>(m_fv ` (set ms \<union> set ms' \<union> {msg}))"
 
+lemma "c_fv_finite": "finite (c_fv c)"
+  apply (cases c)
+  by (simp add: m_fv_finite)
+
 fun c_sapply :: "m_subst \<Rightarrow> constraint \<Rightarrow> constraint" where
   "c_sapply \<sigma> (Constraint ms ms' msg) = Constraint (map (m_sapply \<sigma>) ms) (map (m_sapply \<sigma>) ms') (m_sapply \<sigma> msg)"
+
+lemma "c_sapply_id": "c_sapply Var = id"
+  apply (rule ext)
+  subgoal for c
+    apply (cases c)
+    using m_sapply_id
+    by simp
+  done
 
 fun c_derives :: "constraint \<Rightarrow> bool" where
   "c_derives (Constraint ms ms' msg) = (set ms \<union> set ms') \<turnstile> msg"
@@ -73,8 +85,18 @@ lemma "c_sapply_comp": "c_sapply \<tau> (c_sapply \<sigma> c) = c_sapply (\<tau>
 definition cs_fv :: "constraint_system \<Rightarrow> string set" where
   "cs_fv cs = \<Union>(c_fv ` cs)"
 
+lemma "cs_fv_finite": "finite cs \<Longrightarrow> finite (cs_fv cs)"
+  by (simp add: c_fv_finite cs_fv_def)
+
 definition cs_sapply :: "m_subst \<Rightarrow> constraint_system \<Rightarrow> constraint_system" where
   "cs_sapply \<sigma> cs = c_sapply \<sigma> ` cs"
+
+lemma "cs_sapply_id": "cs_sapply Var = id"
+  apply (rule ext)
+  subgoal for cs
+    unfolding cs_sapply_def
+    by (simp add: c_sapply_id)
+  done
 
 definition cs_derives :: "constraint_system \<Rightarrow> bool" where
   "cs_derives cs = (\<forall>c \<in> cs. c_derives c)"
@@ -236,5 +258,77 @@ theorem "cs_sound": "red cs \<subseteq> sol cs"
   unfolding red_def
   using rer_star_sound
   by auto
+
+(* 8. (b) *)
+
+fun \<Theta> :: "msg \<Rightarrow> nat" where
+  "\<Theta> (Hash t) = \<Theta> t + 1"
+| "\<Theta> (Pair u v) = \<Theta> u + \<Theta> v + 1"
+| "\<Theta> (Sym_encrypt m k) = \<Theta> m + \<Theta> k + 1"
+| "\<Theta> (Public_key_encrypt m k) = \<Theta> m + \<Theta> k + 1"
+| "\<Theta> (Signature m k) = (if k = intruder then \<Theta> m + \<Theta> k + 1 else 1)"
+| "\<Theta> _ = 1"
+
+fun \<chi> :: "msg \<Rightarrow> nat" where
+  "\<chi> (Hash t) = \<chi> t + 1"
+| "\<chi> (Pair u v) = \<chi> u * \<chi> v + 1"
+| "\<chi> (Sym_encrypt m k) = \<chi> m + \<Theta> k + 1"
+| "\<chi> (Public_key_encrypt m k) = \<chi> m + 1"
+| "\<chi> (Signature m k) = \<chi> m + 1"
+| "\<chi> _ = 1"
+
+definition \<chi>' :: "msg set \<Rightarrow> nat" where
+  "\<chi>' M = (\<Prod>m \<in> M. \<chi> m)"
+
+fun w :: "constraint \<Rightarrow> nat" where
+  "w (M | A \<triangleright> t) = \<chi>' (set M) * \<Theta> t"
+
+definition \<eta>1 :: "constraint_system \<Rightarrow> nat" where
+  "\<eta>1 cs = card (cs_fv cs)"
+
+definition \<eta>2 :: "constraint_system \<Rightarrow> nat" where
+  "\<eta>2 cs = (\<Sum>c \<in> cs. w c)"
+
+lemma "rer1_fv_sub": "rer1 c \<sigma> cs \<Longrightarrow> cs_fv (cs \<union> cs_sapply \<sigma> cs') \<subseteq> cs_fv ({c} \<union> cs')"
+  sorry
+
+lemma "rer1_fv_neq": "rer1 c \<sigma> cs \<Longrightarrow> \<sigma> \<noteq> Var \<Longrightarrow> cs_fv (cs \<union> cs_sapply \<sigma> cs') \<noteq> cs_fv ({c} \<union> cs')"
+  sorry
+
+lemma "rer1_measure_lt": "rer1 c Var cs \<Longrightarrow> \<eta>2 cs < w c"
+  sorry
+
+definition "term_rel" :: "(constraint_system \<times> constraint_system) set" where
+  "term_rel = \<eta>1 <*mlex*> measure \<eta>2"
+
+lemma "term_rel_wf": "wf term_rel"
+  unfolding term_rel_def
+  by (simp add: wf_mlex)
+
+inductive "rer_any" :: "constraint_system \<Rightarrow> constraint_system \<Rightarrow> bool" where
+  "rer cs \<sigma> cs' \<Longrightarrow> finite cs \<Longrightarrow> rer_any cs' cs"
+
+lemma "rer1_\<eta>1": "rer cs \<sigma> cs' \<Longrightarrow> finite cs \<Longrightarrow> \<eta>1 cs' \<le> \<eta>1 cs"
+  unfolding \<eta>1_def
+  by (metis card_mono cs_fv_finite rer.cases rer1_fv_sub)
+
+lemma "rer1_\<eta>1'": "rer cs \<sigma> cs' \<Longrightarrow> \<sigma> \<noteq> Var \<Longrightarrow> finite cs \<Longrightarrow> \<eta>1 cs' < \<eta>1 cs"
+  unfolding \<eta>1_def
+  by (metis cs_fv_finite less_le psubset_card_mono rer.cases rer1_fv_neq rer1_fv_sub)
+
+lemma "rer1_\<eta>2": "rer cs \<sigma> cs' \<Longrightarrow> \<sigma> = Var \<Longrightarrow> finite cs \<Longrightarrow> \<eta>2 cs' < \<eta>2 cs"
+  unfolding \<eta>2_def
+  apply (induction rule: rer.induct)
+  subgoal for c \<sigma> cs cs'
+    apply (cases "c \<in> cs'")
+    sorry
+  done
+
+lemma "rer_any_term": "rer_any cs' cs \<Longrightarrow> finite cs \<Longrightarrow> (cs', cs) \<in> term_rel"
+  unfolding term_rel_def
+  by (metis in_measure mlex_leq mlex_less rer1_\<eta>1 rer1_\<eta>1' rer1_\<eta>2 rer_any.cases)
+
+theorem "rer_any_wf": "wfP rer_any"
+  by (metis rer_any.cases rer_any_term term_rel_wf wfE_min wfP_eq_minimal)
 
 end
