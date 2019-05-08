@@ -289,36 +289,6 @@ fun m_lifted_comp :: "m_subst option \<Rightarrow> m_subst \<Rightarrow> m_subst
   "m_lifted_comp None \<tau> = None"
 | "m_lifted_comp (Some \<sigma>) \<tau> = Some (\<sigma> \<circ>m \<tau>)"
 
-(*
-lemma link_unify_2:
-  "m_unify ((Var x, t) # U) = (
-  if (x \<notin> m_fv t) then
-    m_lifted_comp (m_unify (m_sapply_eqs (msg.Var(x := t)) U)) (msg.Var(x := t))
-   else (
-     if Var x = t then m_unify U else None
-    )
-  )"
-  sorry
-*)
-
-(*
-function (sequential) m_unify :: "m_eqs \<Rightarrow> m_subst option"
-  where
-  "unify [] = Some Var"
-| "unify ((Var x, t) # U) = (
-| "unify ((u, Var y) # U) = unify ((Var y, u) # U)"
-| "unify ((Fun f u, Fun g v) # U) =
-  (if (f = g \<and> length u = length v) then
-    unify(append (zip u v) U)
-  else
-    None)"
-*)
-
-(*
-fun m_unify :: "m_eqs \<Rightarrow> m_subst option" where
-  "m_unify U = lift_subst (unify (embed_eqs U))"
-*)
-
 (* 5. (e) *)
 
 lemma embed_eq[simp]:
@@ -465,13 +435,24 @@ fun m_sran :: "m_subst \<Rightarrow> msg set"
 fun msg_set_of_term_set :: "(symbol, string) term set \<Rightarrow> msg set" where
   "msg_set_of_term_set s = {msg_of_term x | x. x \<in> s}"
 
+lemma msg_set_def:
+  "msg_set_of_term_set s = (\<Union>x\<in>s. {msg_of_term x})" by auto
+
+lemma msg_set_def_specific:
+  "(\<Union>x\<in>(sdom \<tau>). {msg_of_term (\<tau> x)}) = msg_set_of_term_set (\<Union>x\<in>(sdom \<tau>). {\<tau> x})" by auto
+
 lemma link_sran:
   "m_sran \<sigma> = msg_set_of_term_set (sran (embed \<circ> \<sigma>))"
 proof -
   have "m_sran \<sigma> = (\<Union>x\<in>m_sdom \<sigma>. {\<sigma> x})" by simp
   then have "... = (\<Union>x\<in>(sdom (embed \<circ> \<sigma>)). {\<sigma> x})"
     using link_sdom by auto
-  then show ?thesis sorry
+  then have "... = (\<Union>x\<in>(sdom (embed \<circ> \<sigma>)). {(msg_of_term \<circ> embed \<circ> \<sigma>) x})" by auto
+  then have "... = (\<Union>x\<in>(sdom (embed \<circ> \<sigma>)). {msg_of_term ((embed \<circ> \<sigma>) x)})" by simp
+  then have "... = msg_set_of_term_set (\<Union>x\<in>(sdom (embed \<circ> \<sigma>)). {(embed \<circ> \<sigma>) x})"
+    using msg_set_def_specific by presburger
+  then show ?thesis
+    using \<open>(\<Union>x\<in>m_sdom \<sigma>. {\<sigma> x}) = (\<Union>x\<in>sdom (Term.embed \<circ> \<sigma>). {\<sigma> x})\<close> by auto
 qed
 
 fun m_svran:: "m_subst \<Rightarrow> string set"
@@ -480,7 +461,16 @@ fun m_svran:: "m_subst \<Rightarrow> string set"
 
 lemma link_svran:
   "m_svran \<sigma> = svran (embed \<circ> \<sigma>)"
-  sorry
+proof -
+  have "m_svran \<sigma> = (\<Union>t\<in>(m_sran \<sigma>).(m_fv t))" by simp
+  then have "... = (\<Union>t\<in>(msg_set_of_term_set (sran (embed \<circ> \<sigma>))).(m_fv t))"
+    using link_sran by auto
+  then have "... =  (\<Union>x\<in>(sran (embed \<circ> \<sigma>)).(m_fv (msg_of_term x)))" by fastforce
+  then have "... =  (\<Union>x\<in>(sran (embed \<circ> \<sigma>)).(fv ((embed \<circ> msg_of_term) x)))"
+    using link_fv by auto
+  moreover have "\<forall>x\<in>(sran (embed \<circ> \<sigma>)). wf_term arity x" sorry
+  then show ?thesis
+    using \<open>(\<Union>t\<in>m_sran \<sigma>. m_fv t) = (\<Union>t\<in>msg_set_of_term_set (sran (Term.embed \<circ> \<sigma>)). m_fv t)\<close> \<open>(\<Union>t\<in>msg_set_of_term_set (sran (Term.embed \<circ> \<sigma>)). m_fv t) = (\<Union>x\<in>sran (Term.embed \<circ> \<sigma>). m_fv (msg_of_term x))\<close> calculation by auto
 
 lemma m_lemma_3:
   assumes "m_unify U = Some \<sigma>"
