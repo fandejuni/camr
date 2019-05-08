@@ -20,6 +20,9 @@ datatype msg =
     | Public_key_encrypt msg msg
     | Signature msg msg
 
+inductive is_var :: "msg \<Rightarrow> bool" where
+  "is_var (Var _)"
+
 (* 5. (b) *)
 
 datatype symbol =
@@ -290,6 +293,9 @@ fun m_lifted_comp :: "m_subst option \<Rightarrow> m_subst \<Rightarrow> m_subst
 | "m_lifted_comp (Some \<sigma>) \<tau> = Some (\<sigma> \<circ>m \<tau>)"
 
 (* 5. (e) *)
+
+lemma "m_sapply_comp": "m_sapply \<tau> (m_sapply \<sigma> m) = m_sapply (\<tau> \<circ>m \<sigma>) m"
+  by (induction m) auto
 
 lemma embed_eq[simp]:
   "fst (embed_eq eq) = embed (fst eq)"
