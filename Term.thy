@@ -486,6 +486,7 @@ proof -
   moreover have "\<forall>x\<in>(sran (embed \<circ> \<sigma>)). wf_term arity x" sorry
   then show ?thesis
     using \<open>(\<Union>t\<in>m_sran \<sigma>. m_fv t) = (\<Union>t\<in>msg_set_of_term_set (sran (Term.embed \<circ> \<sigma>)). m_fv t)\<close> \<open>(\<Union>t\<in>msg_set_of_term_set (sran (Term.embed \<circ> \<sigma>)). m_fv t) = (\<Union>x\<in>sran (Term.embed \<circ> \<sigma>). m_fv (msg_of_term x))\<close> calculation by auto
+qed
 
 lemma m_lemma_3:
   assumes "m_unify U = Some \<sigma>"
