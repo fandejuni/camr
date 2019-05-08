@@ -301,77 +301,88 @@ fun m_lifted_comp :: "m_subst option \<Rightarrow> m_subst \<Rightarrow> m_subst
   "m_lifted_comp None \<tau> = None"
 | "m_lifted_comp (Some \<sigma>) \<tau> = Some (\<sigma> \<circ>m \<tau>)"
 
+(* 5. (e) *)
+
 lemma "m_sapply_comp": "m_sapply \<tau> (m_sapply \<sigma> m) = m_sapply (\<tau> \<circ>m \<sigma>) m"
   by (induction m) auto
 
-(*
-lemma link_unify_2:
-  "m_unify ((Var x, t) # U) = (
-  if (x \<notin> m_fv t) then
-    m_lifted_comp (m_unify (m_sapply_eqs (msg.Var(x := t)) U)) (msg.Var(x := t))
-   else (
-     if Var x = t then m_unify U else None
-    )
-  )"
-  sorry
-*)
+lemma embed_eq[simp]:
+  "fst (embed_eq eq) = embed (fst eq)"
+  "snd (embed_eq eq) = embed (snd eq)"
+   apply (metis embed_eq.simps fstI prod.collapse)
+  by (metis embed_eq.simps prod.collapse sndI)
 
-(*
-function (sequential) m_unify :: "m_eqs \<Rightarrow> m_subst option"
-  where
-  "unify [] = Some Var"
-| "unify ((Var x, t) # U) = (
-| "unify ((u, Var y) # U) = unify ((Var y, u) # U)"
-| "unify ((Fun f u, Fun g v) # U) =
-  (if (f = g \<and> length u = length v) then
-    unify(append (zip u v) U)
-  else
-    None)"
-*)
+(* lemma embed_msg_of_term [simp]:
+  "wf_term arity t \<Longrightarrow> embed (msg_of_term t) = t" *)
 
-(*
-fun m_unify :: "m_eqs \<Rightarrow> m_subst option" where
-  "m_unify U = lift_subst (unify (embed_eqs U))"
-*)
+lemma wf_subst_id:
+  assumes "wf_subst arity \<tau>"
+  shows "sapply (embed \<circ> msg_of_term \<circ> \<tau>) (embed m) = sapply \<tau> (embed m)"
+  by (metis assms comp_apply embed_msg_of_term sapply_cong wf_subst_def)
 
-(* 5. (e) *)
-
-theorem m_soundness1:
-  assumes "m_unify U = Some \<sigma>"
+lemma link_soundness:
+  assumes "unifiess \<tau> (embed_eqs U)"
+  and "msg_of_term \<circ> \<tau> = \<sigma>"
+  and "wf_subst arity \<tau>"
   shows "m_unifiess \<sigma> U"
   using assms
 proof (induction U)
   case Nil
-  then show ?case
-    by (simp add: m_unifiess_empty)
+  then show ?case by (simp add: m_unifiess_empty)
 next
   case (Cons a U)
-  obtain \<tau> where "unify (embed_eqs (a # U)) = Some \<tau>"
-    using Cons.prems by fastforce
-  then have "unifiess \<tau> (embed_eqs (a # U))" 
-    by (simp add: soundness1)
-  then have "unifiess \<tau> (embed_eqs U)"
-    by (metis embed_eqs.elims list.discI list.inject local.Cons unifiess.simps)
-  moreover have "\<sigma> = msg_of_term \<circ> \<tau>"
-    using Cons.prems \<open>unify (embed_eqs (a # U)) = Some \<tau>\<close> by auto
-  then show ?case sorry
+  have "unifies \<tau> (embed_eq a)"
+    by (metis Cons.prems(1) embed_eqs.simps(2) list.discI list.inject unifiess.cases)
+  moreover obtain "wf_term arity (embed (fst a))" and "wf_term arity (embed (snd a))"
+    by (metis embed_eq.cases embed_eq.elims embed_eq.simps fst_conv fst_swap le_boolD le_boolI' m_eq_of_eq.cases msg_of_term_embed old.prod.exhaust old.prod.inject snd_conv snd_eqD snd_swap sndsp.simps swap_simp wf_term_embed)
+  then obtain "wf_term arity (sapply \<tau> (embed (fst a)))" and "wf_term arity (sapply \<tau> (embed (snd a)))"
+    using assms(3) wf_term_sapply by blast
+  moreover have "sapply \<tau> (fst (embed_eq a)) = sapply \<tau> (snd (embed_eq a))"
+    using unifies.simps calculation(1) by (metis fst_conv sndI)
+  then have "sapply \<tau> (embed (fst a)) = sapply \<tau> (embed (snd a))" by simp
+
+  have "unifies (embed \<circ> \<sigma>) (embed_eq a)"
+  proof -
+    have "sapply (embed \<circ> \<sigma>) (embed (fst a)) = sapply (embed \<circ> msg_of_term \<circ> \<tau>) (embed (fst a))"
+      by (simp add: assms(2) comp_assoc)
+    then have "... = sapply \<tau> (embed (fst a))"
+      using assms(3) wf_subst_id by blast
+    then have "... = sapply \<tau> (embed (snd a))" 
+      by (simp add: \<open>\<tau> \<cdot> Term.embed (fst a) = \<tau> \<cdot> Term.embed (snd a)\<close>)
+    then have "... = sapply (embed \<circ> \<sigma>) (embed (snd a))"
+      by (metis assms(2) assms(3) comp_assoc wf_subst_id)
+    then show ?thesis
+      by (metis \<open>(Term.embed \<circ> \<sigma>) \<cdot> Term.embed (fst a) = (Term.embed \<circ> msg_of_term \<circ> \<tau>) \<cdot> Term.embed (fst a)\<close> \<open>(Term.embed \<circ> msg_of_term \<circ> \<tau>) \<cdot> Term.embed (fst a) = \<tau> \<cdot> Term.embed (fst a)\<close> \<open>\<tau> \<cdot> Term.embed (fst a) = \<tau> \<cdot> Term.embed (snd a)\<close> embed_eq(1) embed_eq(2) prod.collapse unifies_eq)
+  qed
+  then show ?case
+    by (metis Cons.IH Cons.prems(1) assms(2) assms(3) embed_eqs.simps(2) link_unifiess list.inject unifiess.simps)
 qed
 
-(*
-lemma link_unifies:
-  "m_unifies \<sigma> eq = unifies (embed \<circ> \<sigma>) (embed_eq eq)"
-
-lemma link_unifiess:
-  "m_unifiess \<sigma> U = unifiess (embed \<circ> \<sigma>) (embed_eqs U)"
-*)
-
-(*
-  m_unifies_eq: "(m_sapply \<sigma> u = m_sapply \<sigma> t) \<Longrightarrow> m_unifies \<sigma> (u, t)"
-*)
-
-(*
-| m_unifiess_rec:   "(m_unifiess \<sigma> s) \<and> (m_unifies \<sigma> eq) \<Longrightarrow> m_unifiess \<sigma> (eq # s)"
-*)
+theorem m_soundness1:
+  assumes "m_unify U = Some \<sigma>"
+  shows "m_unifiess \<sigma> U"
+proof -
+  obtain \<tau> where "unify (embed_eqs U) = Some \<tau>"
+    using assms by fastforce
+  then have "unifiess \<tau> (embed_eqs U)" by (simp add: soundness1)
+  moreover have "\<sigma> = msg_of_term \<circ> \<tau>"
+    using \<open>unify (embed_eqs U) = Some \<tau>\<close> assms by auto
+  moreover have "wf_eqs arity (embed_eqs U)"
+  proof (induction U)
+    case Nil
+    then show ?case
+      by (simp add: wf_eqs.intros(1))
+  next
+    case (Cons a U)
+    obtain "wf_term arity (embed (fst a))" and "wf_term arity (embed (snd a))" by simp
+    then show ?case
+      by (metis Cons.IH embed_eq(1) embed_eq(2) embed_eqs.simps(2) le_boolD le_boolI' wf_eq_def wf_eqs.simps wf_term_embed)
+  qed
+  then have "wf_subst arity \<tau>"
+    using \<open>unify (embed_eqs U) = Some \<tau>\<close> wf_subst_unify by blast
+  then show ?thesis
+    using calculation(1) calculation(2) link_soundness by auto
+qed
 
 (* 5. (f) *)
 
@@ -439,13 +450,24 @@ fun m_sran :: "m_subst \<Rightarrow> msg set"
 fun msg_set_of_term_set :: "(symbol, string) term set \<Rightarrow> msg set" where
   "msg_set_of_term_set s = {msg_of_term x | x. x \<in> s}"
 
+lemma msg_set_def:
+  "msg_set_of_term_set s = (\<Union>x\<in>s. {msg_of_term x})" by auto
+
+lemma msg_set_def_specific:
+  "(\<Union>x\<in>(sdom \<tau>). {msg_of_term (\<tau> x)}) = msg_set_of_term_set (\<Union>x\<in>(sdom \<tau>). {\<tau> x})" by auto
+
 lemma link_sran:
   "m_sran \<sigma> = msg_set_of_term_set (sran (embed \<circ> \<sigma>))"
 proof -
   have "m_sran \<sigma> = (\<Union>x\<in>m_sdom \<sigma>. {\<sigma> x})" by simp
   then have "... = (\<Union>x\<in>(sdom (embed \<circ> \<sigma>)). {\<sigma> x})"
     using link_sdom by auto
-  then show ?thesis sorry
+  then have "... = (\<Union>x\<in>(sdom (embed \<circ> \<sigma>)). {(msg_of_term \<circ> embed \<circ> \<sigma>) x})" by auto
+  then have "... = (\<Union>x\<in>(sdom (embed \<circ> \<sigma>)). {msg_of_term ((embed \<circ> \<sigma>) x)})" by simp
+  then have "... = msg_set_of_term_set (\<Union>x\<in>(sdom (embed \<circ> \<sigma>)). {(embed \<circ> \<sigma>) x})"
+    using msg_set_def_specific by presburger
+  then show ?thesis
+    using \<open>(\<Union>x\<in>m_sdom \<sigma>. {\<sigma> x}) = (\<Union>x\<in>sdom (Term.embed \<circ> \<sigma>). {\<sigma> x})\<close> by auto
 qed
 
 fun m_svran:: "m_subst \<Rightarrow> string set"
@@ -454,7 +476,16 @@ fun m_svran:: "m_subst \<Rightarrow> string set"
 
 lemma link_svran:
   "m_svran \<sigma> = svran (embed \<circ> \<sigma>)"
-  sorry
+proof -
+  have "m_svran \<sigma> = (\<Union>t\<in>(m_sran \<sigma>).(m_fv t))" by simp
+  then have "... = (\<Union>t\<in>(msg_set_of_term_set (sran (embed \<circ> \<sigma>))).(m_fv t))"
+    using link_sran by auto
+  then have "... =  (\<Union>x\<in>(sran (embed \<circ> \<sigma>)).(m_fv (msg_of_term x)))" by fastforce
+  then have "... =  (\<Union>x\<in>(sran (embed \<circ> \<sigma>)).(fv ((embed \<circ> msg_of_term) x)))"
+    using link_fv by auto
+  moreover have "\<forall>x\<in>(sran (embed \<circ> \<sigma>)). wf_term arity x" sorry
+  then show ?thesis
+    using \<open>(\<Union>t\<in>m_sran \<sigma>. m_fv t) = (\<Union>t\<in>msg_set_of_term_set (sran (Term.embed \<circ> \<sigma>)). m_fv t)\<close> \<open>(\<Union>t\<in>msg_set_of_term_set (sran (Term.embed \<circ> \<sigma>)). m_fv t) = (\<Union>x\<in>sran (Term.embed \<circ> \<sigma>). m_fv (msg_of_term x))\<close> calculation by auto
 
 lemma m_lemma_3:
   assumes "m_unify U = Some \<sigma>"
