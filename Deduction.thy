@@ -55,7 +55,7 @@ lemma deduce_cut:
 (* 7. (a) *)
 
 datatype constraint = Constraint "msg list" "msg list" "msg" ("((2_/|_)/\<triangleright>_)" [67,67,67]66)
-type_synonym constraint_system = "constraint set"
+type_synonym constraint_system = "constraint list"
 
 fun c_fv :: "constraint \<Rightarrow> string set" where
   "c_fv (Constraint ms ms' msg) = \<Union>(m_fv ` (set ms \<union> set ms' \<union> {msg}))"
@@ -83,13 +83,13 @@ lemma "c_sapply_comp": "c_sapply \<tau> (c_sapply \<sigma> c) = c_sapply (\<tau>
   by (cases c) simp
 
 definition cs_fv :: "constraint_system \<Rightarrow> string set" where
-  "cs_fv cs = \<Union>(c_fv ` cs)"
+  "cs_fv cs = \<Union>(c_fv ` set cs)"
 
-lemma "cs_fv_finite": "finite cs \<Longrightarrow> finite (cs_fv cs)"
+lemma "cs_fv_finite": "finite (cs_fv cs)"
   by (simp add: c_fv_finite cs_fv_def)
 
 definition cs_sapply :: "m_subst \<Rightarrow> constraint_system \<Rightarrow> constraint_system" where
-  "cs_sapply \<sigma> cs = c_sapply \<sigma> ` cs"
+  "cs_sapply \<sigma> cs = map (c_sapply \<sigma>) cs"
 
 lemma "cs_sapply_id": "cs_sapply Var = id"
   apply (rule ext)
@@ -99,7 +99,7 @@ lemma "cs_sapply_id": "cs_sapply Var = id"
   done
 
 definition cs_derives :: "constraint_system \<Rightarrow> bool" where
-  "cs_derives cs = (\<forall>c \<in> cs. c_derives c)"
+  "cs_derives cs = list_all c_derives cs"
 
 (* 7. (b) *)
 
@@ -107,44 +107,48 @@ type_synonym sol_set = "m_subst set"
 definition sol :: "constraint_system \<Rightarrow> sol_set" where
   "sol cs = {\<sigma> | \<sigma>. cs_derives (cs_sapply \<sigma> cs)}"
 
-lemma "sol_cs_union": "sol (cs \<union> cs') = (sol cs) \<inter> (sol cs')"
+lemma "sol_cs_union": "sol (cs @ cs') = (sol cs) \<inter> (sol cs')"
   unfolding sol_def cs_sapply_def cs_derives_def
   by (rule set_eqI) auto
 
-lemma "sol_subst_comp": "\<tau> \<in> sol (cs_sapply \<sigma> cs) \<Longrightarrow> \<tau> \<circ>m \<sigma> \<in> sol cs"
+lemma "sol_c_sapply": "\<tau> \<in> sol [c_sapply \<sigma> c] \<Longrightarrow> \<tau> \<circ>m \<sigma> \<in> sol [c]"
   unfolding sol_def cs_sapply_def cs_derives_def
-  using c_sapply_comp by auto
+  by (simp add: c_sapply_comp)
 
-lemma "sol_sapply": "(m_sapply \<tau> ` (set M \<union> set A) \<turnstile> m_sapply \<tau> t) = (\<tau> \<in> sol {M|A\<triangleright>t})"
+lemma "sol_cs_sapply": "\<tau> \<in> sol (cs_sapply \<sigma> cs) \<Longrightarrow> \<tau> \<circ>m \<sigma> \<in> sol cs"
+  unfolding sol_def cs_sapply_def cs_derives_def
+  by (simp add: c_sapply_comp list_all_length)
+
+lemma "sol_sapply": "(m_sapply \<tau> ` (set M \<union> set A) \<turnstile> m_sapply \<tau> t) = (\<tau> \<in> sol [M | A \<triangleright> t])"
   unfolding sol_def cs_derives_def cs_sapply_def
   apply (rule iffI)
    apply auto
    by (simp add: image_Un)+
 
-lemma "sol_fst": "\<tau> \<in> sol {c1, c2} \<Longrightarrow> \<tau> \<in> sol {c1}"
+lemma "sol_fst": "\<tau> \<in> sol [c1, c2] \<Longrightarrow> \<tau> \<in> sol [c1]"
   using sol_cs_union
   by fastforce
 
-lemma "sol_snd": "\<tau> \<in> sol {c1, c2} \<Longrightarrow> \<tau> \<in> sol {c2}"
+lemma "sol_snd": "\<tau> \<in> sol [c1, c2] \<Longrightarrow> \<tau> \<in> sol [c2]"
   using sol_cs_union
-  by (metis insert_commute sol_fst)
+  by (metis (full_types) IntE append_Cons append_Nil)
 
 (* 7. (c) *)
 
 inductive rer1 :: "constraint \<Rightarrow> m_subst \<Rightarrow> constraint_system \<Rightarrow> bool" ("_/\<leadsto>\<^sub>1[_]/_" [64,64,64]63) where
-  Unif: "\<not>is_var t \<Longrightarrow> \<exists>u \<in> set M \<union> set A. m_unify [(t, u)] = Some \<sigma>  \<Longrightarrow> rer1 (M | A \<triangleright> t) \<sigma> {}"
-| Comp_Hash: "rer1 (M | A \<triangleright> Hash t) Var {M | A \<triangleright> t}"
-| Comp_Pair: "rer1 (M | A \<triangleright> Pair t1 t2) Var {M | A \<triangleright> t1, M | A \<triangleright> t2}"
-| Comp_Sym_encrypt: "rer1 (M | A \<triangleright> Sym_encrypt m k) Var {M | A \<triangleright> m, M | A \<triangleright> k}"
-| Comp_Public_key_encrypt: "rer1 (M | A \<triangleright> Public_key_encrypt m k) Var {M | A \<triangleright> m, M | A \<triangleright> k}"
-| Comp_Signature: "rer1 (M | A \<triangleright> Signature t intruder) Var {M | A \<triangleright> t}"
-| Proj: "rer1 ((Pair u v # M) | A \<triangleright> t) Var {(u # v # M) | (Pair u v # A) \<triangleright> t}"
-| Sdec: "rer1 ((Sym_encrypt u k # M) | A \<triangleright> t) Var {(u # M) | (Sym_encrypt u k # A) \<triangleright> t, M | (Sym_encrypt u k # A) \<triangleright> k}"
-| Adec: "rer1 ((Public_key_encrypt u intruder # M) | A \<triangleright> t) Var {(u # M) | (Public_key_encrypt u intruder # A) \<triangleright> t}"
-| Ksub: "rer1 ((Public_key_encrypt u (Var x) # M) | A \<triangleright> t) (Var(x := intruder)) {c_sapply (Var(x := intruder)) ((Public_key_encrypt u (Var x) # M) | A \<triangleright> t)}"
+  Unif: "\<not>is_var t \<Longrightarrow> \<exists>u \<in> set M \<union> set A. m_unify [(t, u)] = Some \<sigma>  \<Longrightarrow> rer1 (M | A \<triangleright> t) \<sigma> []"
+| Comp_Hash: "rer1 (M | A \<triangleright> Hash t) Var [M | A \<triangleright> t]"
+| Comp_Pair: "rer1 (M | A \<triangleright> Pair t1 t2) Var [M | A \<triangleright> t1, M | A \<triangleright> t2]"
+| Comp_Sym_encrypt: "rer1 (M | A \<triangleright> Sym_encrypt m k) Var [M | A \<triangleright> m, M | A \<triangleright> k]"
+| Comp_Public_key_encrypt: "rer1 (M | A \<triangleright> Public_key_encrypt m k) Var [M | A \<triangleright> m, M | A \<triangleright> k]"
+| Comp_Signature: "rer1 (M | A \<triangleright> Signature t intruder) Var [M | A \<triangleright> t]"
+| Proj: "Pair u v \<in> set M \<Longrightarrow> M' = removeAll (Pair u v) M \<Longrightarrow> rer1 (M | A \<triangleright> t) Var [(u # v # M') | (Pair u v # A) \<triangleright> t]"
+| Sdec: "Sym_encrypt u k \<in> set M \<Longrightarrow> M' = removeAll (Sym_encrypt u k) M \<Longrightarrow> rer1 (M | A \<triangleright> t) Var [(u # M') | (Sym_encrypt u k # A) \<triangleright> t, M' | (Sym_encrypt u k # A) \<triangleright> k]"
+| Adec: "Public_key_encrypt u intruder \<in> set M \<Longrightarrow> M' = removeAll (Public_key_encrypt u intruder) M \<Longrightarrow> rer1 (M | A \<triangleright> t) Var [(u # M') | (Public_key_encrypt u intruder # A) \<triangleright> t]"
+| Ksub: "Public_key_encrypt u (Var x) \<in> set M \<Longrightarrow> \<sigma> = Var(x := intruder) \<Longrightarrow> rer1 (M | A \<triangleright> t) \<sigma> [c_sapply \<sigma> (M | A \<triangleright> t)]"
 
 inductive rer :: "constraint_system \<Rightarrow> m_subst \<Rightarrow> constraint_system \<Rightarrow> bool" ("_/\<leadsto>[_]/_" [73,73,73]72) where
-  Context: "rer1 c \<sigma> cs \<Longrightarrow> c \<notin> cs' \<Longrightarrow> rer ({c} \<union> cs') \<sigma> (cs \<union> cs_sapply \<sigma> cs')"
+  Context: "rer1 c \<sigma> cs \<Longrightarrow> c \<notin> set cs' \<Longrightarrow> rer (c # cs') \<sigma> (cs @ cs_sapply \<sigma> cs')"
 
 inductive rer_star :: "constraint_system \<Rightarrow> m_subst \<Rightarrow> constraint_system \<Rightarrow> bool" ("_/\<leadsto>*[_]/_" [73,73,73]72) where
   Refl: "rer_star cs Var cs"
@@ -156,7 +160,7 @@ inductive c_simple :: "constraint \<Rightarrow> bool" where
   "c_simple (M | A \<triangleright> (Var _))"
 
 definition cs_simple :: "constraint_system \<Rightarrow> bool" where
-  "cs_simple cs = (\<forall>c \<in> cs. c_simple c)"
+  "cs_simple cs = list_all c_simple cs"
 
 definition red :: "constraint_system \<Rightarrow> m_subst set" where
   "red cs = {m_scomp \<tau> \<sigma> | \<tau> \<sigma>. \<exists>cs'. rer_star cs \<sigma> cs' \<and> cs_simple cs' \<and> \<tau> \<in> sol cs'}"
@@ -167,7 +171,7 @@ lemma "m_subst_intruder": "m_sapply \<tau> intruder = intruder"
   unfolding intruder_def
   by simp
 
-lemma "rer1_sound": "rer1 c \<sigma> cs \<Longrightarrow> \<tau> \<in> sol cs \<Longrightarrow> \<tau> \<circ>m \<sigma> \<in> sol {c}"
+lemma "rer1_sound": "rer1 c \<sigma> cs \<Longrightarrow> \<tau> \<in> sol cs \<Longrightarrow> \<tau> \<circ>m \<sigma> \<in> sol [c]"
 proof (induction rule: rer1.induct)
   case (Unif t M A \<sigma>)
   then obtain "u" where u_in_M_A: "u \<in> set M \<union> set A" and "m_unify [(t, u)] = Some \<sigma>" by auto
@@ -203,51 +207,58 @@ next
     using m_subst_intruder
     by auto
 next
-  case (Proj u v M A t)
-  then have "tau_t": "m_sapply \<tau> ` (set (u # v # M) \<union> set (Pair u v # A)) \<turnstile> m_sapply \<tau> t"
-    using sol_sapply by blast
-  have "m_sapply \<tau> ` (set (v # M) \<union> set (Pair u v # A)) \<turnstile> m_sapply \<tau> u"
+  case (Proj u v M M' A t)
+  then have "rem": "set M' \<union> set (Pair u v # A) = set M \<union> set A"
     by auto
-  then have "tau_t'": "m_sapply \<tau> ` (set (v # M) \<union> set (Pair u v # A)) \<turnstile> m_sapply \<tau> t"
-    by (metis Un_insert_left deduce_cut image_insert list.simps(15) tau_t)
-  have "m_sapply \<tau> ` (set M \<union> set (Pair u v # A)) \<turnstile> m_sapply \<tau> v"
+  have "tau_t": "m_sapply \<tau> ` (set (u # v # M') \<union> set (Pair u v # A)) \<turnstile> m_sapply \<tau> t"
+    using Proj.prems sol_sapply by blast
+  have "m_sapply \<tau> ` (set (v # M') \<union> set (Pair u v # A)) \<turnstile> m_sapply \<tau> u"
     by auto
-  then have "m_sapply \<tau> ` (set M \<union> set (Pair u v # A)) \<turnstile> m_sapply \<tau> t"
+  then have "tau_t'": "m_sapply \<tau> ` (set (v # M') \<union> set (Pair u v # A)) \<turnstile> m_sapply \<tau> t"
+    by (metis Un_insert_left deduce_cut_aux image_insert list.simps(15) tau_t)
+  have "m_sapply \<tau> ` (set M' \<union> set (Pair u v # A)) \<turnstile> m_sapply \<tau> v"
+    by auto
+  then have "m_sapply \<tau> ` (set M' \<union> set (Pair u v # A)) \<turnstile> m_sapply \<tau> t"
     by (metis Un_insert_left deduce_cut image_insert list.simps(15) tau_t')
   then show ?case
-    using sol_sapply[of \<tau> "Pair u v # M" A t] by simp
+    by (metis cs_sapply_id id_apply rem sol_sapply sol_cs_sapply)
 next
-  case (Sdec u k M A t)
-  then have "tau_t": "m_sapply \<tau> ` (set (u # M) \<union> set (Sym_encrypt u k # A)) \<turnstile> m_sapply \<tau> t"
-    using sol_sapply sol_fst by blast
-  have "m_sapply \<tau> ` (set M \<union> set (Sym_encrypt u k # A)) \<turnstile> m_sapply \<tau> k"
-    using Sdec.prems sol_sapply sol_snd by blast
-  then have "m_sapply \<tau> ` (set M \<union> set (Sym_encrypt u k # A)) \<turnstile> m_sapply \<tau> u"
+  case (Sdec u k M M' A t)
+  then have "rem": "set M' \<union> set (Sym_encrypt u k # A) = set M \<union> set A"
     by auto
-  then have "m_sapply \<tau> ` (set (Sym_encrypt u k # M) \<union> set A) \<turnstile> m_sapply \<tau> t"
-    by (metis (no_types, lifting) Un_insert_left Un_insert_right deduce_cut image_insert list.simps(15) tau_t)
+  have "tau_t": "m_sapply \<tau> ` (set (u # M') \<union> set (Sym_encrypt u k # A)) \<turnstile> m_sapply \<tau> t"
+    using Sdec.prems sol_fst sol_sapply by blast
+  have "m_sapply \<tau> ` (set M' \<union> set (Sym_encrypt u k # A)) \<turnstile> m_sapply \<tau> k"
+    using Sdec.prems sol_sapply sol_snd by blast
+  then have "m_sapply \<tau> ` (set M' \<union> set (Sym_encrypt u k # A)) \<turnstile> m_sapply \<tau> u"
+    by auto
+  then have "m_sapply \<tau> ` (set M \<union> set A) \<turnstile> m_sapply \<tau> t"
+    by (metis Un_insert_left deduce_cut_aux image_insert list.simps(15) rem tau_t)
   then show ?case
-    using sol_sapply[of \<tau> "Sym_encrypt u k # M" A t] by simp
+    by (simp add: sol_sapply)
 next
-  case (Adec u M A t)
-  then have "tau_t": "m_sapply \<tau> ` (set (u # M) \<union> set (Public_key_encrypt u intruder # A)) \<turnstile> m_sapply \<tau> t"
-    using sol_sapply by blast
-  have "m_sapply \<tau> ` (set (Public_key_encrypt u intruder # M) \<union> set A) \<turnstile> m_sapply \<tau> u"
+  case (Adec u M M' A t)
+  then have "rem": "set (Public_key_encrypt u intruder # M') \<union> set A = set M \<union> set A"
+    by auto
+  have "tau_t": "m_sapply \<tau> ` (set (u # M') \<union> set (Public_key_encrypt u intruder # A)) \<turnstile> m_sapply \<tau> t"
+    using Adec.prems sol_sapply by blast
+  have "m_sapply \<tau> ` (set (Public_key_encrypt u intruder # M') \<union> set A) \<turnstile> m_sapply \<tau> u"
     by (simp add: Ax deduce.Adec m_subst_intruder)
-  then have "m_sapply \<tau> ` (set (Public_key_encrypt u intruder # M) \<union> set A) \<turnstile> m_sapply \<tau> t"
-    by (metis (no_types, lifting) Un_insert_left Un_insert_right deduce_cut image_insert list.simps(15) tau_t)
+  then have "m_sapply \<tau> ` (set M \<union> set A) \<turnstile> m_sapply \<tau> t"
+    by (metis (no_types, lifting) Un_commute Un_insert_left deduce_cut_aux image_insert list.simps(15) rem tau_t)
   then show ?case
-    using sol_sapply[of \<tau> "Public_key_encrypt u intruder # M" A t] by simp
+    by (simp add: sol_sapply)
 next
-  case (Ksub u x M A t)
+  case (Ksub u x M \<sigma> A t)
   then show ?case
-    by (metis cs_sapply_def image_empty image_insert sol_subst_comp)
+    using sol_c_sapply
+    by blast
 qed
 
 lemma "rer_sound": "rer cs \<sigma> cs' \<Longrightarrow> \<tau> \<in> sol cs' \<Longrightarrow> \<tau> \<circ>m \<sigma> \<in> sol cs"
-  using sol_cs_union sol_subst_comp rer1_sound
-  apply -
-  by (induction rule: rer.induct) blast
+  apply (induction rule: rer.induct)
+  using sol_cs_union sol_cs_sapply rer1_sound
+  by (metis (full_types) IntE IntI append_Cons append_Nil)
 
 lemma "rer_star_sound": "rer_star cs \<sigma> cs' \<Longrightarrow> cs_simple cs' \<Longrightarrow> \<tau> \<in> sol cs' \<Longrightarrow> \<tau> \<circ>m \<sigma> \<in> sol cs"
   using rer_sound m_sapply_comp
@@ -287,12 +298,12 @@ definition \<eta>1 :: "constraint_system \<Rightarrow> nat" where
   "\<eta>1 cs = card (cs_fv cs)"
 
 definition \<eta>2 :: "constraint_system \<Rightarrow> nat" where
-  "\<eta>2 cs = (\<Sum>c \<in> cs. w c)"
+  "\<eta>2 cs = (\<Sum>c \<in> set cs. w c)"
 
-lemma "rer1_fv_sub": "rer1 c \<sigma> cs \<Longrightarrow> cs_fv (cs \<union> cs_sapply \<sigma> cs') \<subseteq> cs_fv ({c} \<union> cs')"
+lemma "rer1_fv_sub": "rer1 c \<sigma> cs \<Longrightarrow> cs_fv (cs @ cs_sapply \<sigma> cs') \<subseteq> cs_fv (c # cs')"
   sorry
 
-lemma "rer1_fv_neq": "rer1 c \<sigma> cs \<Longrightarrow> \<sigma> \<noteq> Var \<Longrightarrow> cs_fv (cs \<union> cs_sapply \<sigma> cs') \<noteq> cs_fv ({c} \<union> cs')"
+lemma "rer1_fv_neq": "rer1 c \<sigma> cs \<Longrightarrow> \<sigma> \<noteq> Var \<Longrightarrow> cs_fv (cs @ cs_sapply \<sigma> cs') \<noteq> cs_fv (c # cs')"
   sorry
 
 lemma "rer1_measure_lt": "rer1 c Var cs \<Longrightarrow> \<eta>2 cs < w c"
@@ -306,24 +317,26 @@ lemma "term_rel_wf": "wf term_rel"
   by (simp add: wf_mlex)
 
 inductive "rer_any" :: "constraint_system \<Rightarrow> constraint_system \<Rightarrow> bool" where
-  "rer cs \<sigma> cs' \<Longrightarrow> finite cs \<Longrightarrow> rer_any cs' cs"
+  "rer cs \<sigma> cs' \<Longrightarrow> rer_any cs' cs"
 
-lemma "rer1_\<eta>1": "rer cs \<sigma> cs' \<Longrightarrow> finite cs \<Longrightarrow> \<eta>1 cs' \<le> \<eta>1 cs"
+lemma "rer1_\<eta>1": "rer cs \<sigma> cs' \<Longrightarrow> \<eta>1 cs' \<le> \<eta>1 cs"
   unfolding \<eta>1_def
-  by (metis card_mono cs_fv_finite rer.cases rer1_fv_sub)
+  by (metis card_mono cs_fv_finite rer.simps rer1_fv_sub)
 
-lemma "rer1_\<eta>1'": "rer cs \<sigma> cs' \<Longrightarrow> \<sigma> \<noteq> Var \<Longrightarrow> finite cs \<Longrightarrow> \<eta>1 cs' < \<eta>1 cs"
+lemma "rer1_\<eta>1'": "rer cs \<sigma> cs' \<Longrightarrow> \<sigma> \<noteq> Var \<Longrightarrow> \<eta>1 cs' < \<eta>1 cs"
   unfolding \<eta>1_def
-  by (metis cs_fv_finite less_le psubset_card_mono rer.cases rer1_fv_neq rer1_fv_sub)
+  by (metis cs_fv_finite le_neq_trans psubset_card_mono rer.simps rer1_fv_neq rer1_fv_sub)
 
-lemma "rer1_\<eta>2": "rer cs \<sigma> cs' \<Longrightarrow> \<sigma> = Var \<Longrightarrow> finite cs \<Longrightarrow> \<eta>2 cs' < \<eta>2 cs"
+lemma "rer1_\<eta>2": "rer cs \<sigma> cs' \<Longrightarrow> \<sigma> = Var \<Longrightarrow> \<eta>2 cs' < \<eta>2 cs"
   unfolding \<eta>2_def
 proof (induction rule: rer.induct)
   case (Context c \<sigma> cs cs')
-  then have eq: "sum w ({c} \<union> cs') = w c + sum w cs'"
+  then have eq: "sum w (set (c # cs')) = w c + sum w (set cs')"
     by auto
-  have "sum w (cs \<union> cs_sapply \<sigma> cs') \<le> sum w cs + sum w cs'"
-    by (metis Context.prems(1) add.commute cs_sapply_id id_apply infinite_Un order_refl sum.infinite sum.union_inter trans_le_add1)
+  have "cs_sapply \<sigma> cs' = cs'"
+    by (simp add: Context.prems cs_sapply_id)
+  then have "sum w (set (cs @ cs_sapply \<sigma> cs')) \<le> sum w (set cs) + sum w (set cs')"
+    by (metis List.finite_set le_add1 set_append sum.union_inter)
   then show ?case
     using Context.hyps(1) Context.prems(1) \<eta>2_def eq rer1_measure_lt
     by fastforce
