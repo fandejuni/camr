@@ -371,11 +371,55 @@ next
 qed auto
 
 lemma "rer1_fv_sub": "rer1 c \<sigma> cs \<Longrightarrow> cs_fv (cs @ cs_sapply \<sigma> cs') \<subseteq> cs_fv (c # cs')"
+  using rer1_fv_sub_cs rer1_fv_sub_cs'
   unfolding cs_fv_def
-  using cs_fv_def rer1_fv_sub_cs rer1_fv_sub_cs' by auto
+  by auto
 
 lemma "rer1_fv_neq": "rer1 c \<sigma> cs \<Longrightarrow> \<sigma> \<noteq> Var \<Longrightarrow> cs_fv (cs @ cs_sapply \<sigma> cs') \<noteq> cs_fv (c # cs')"
-  sorry
+proof (induction rule: rer1.induct)
+  case (Unif t M A \<sigma>)
+  then obtain "u" "x" where $: "u \<in> set M \<union> set A" and "m_un": "m_unify [(t, u)] = Some \<sigma>" and "x_m_sdom": "x \<in> m_sdom \<sigma>"
+    by force
+  then have "m_sdom \<sigma> \<subseteq> m_fv_eq (t, u)"
+    using m_fv_eqs.simps m_lemma_3 by blast
+  then have "m_sdom \<sigma> \<subseteq> c_fv (M | A \<triangleright> t)"
+    using $
+    by auto
+  then have "x_cs_fv": "x \<in> cs_fv ((M | A \<triangleright> t) # cs')"
+    unfolding cs_fv_def
+    using "x_m_sdom"
+    by auto
+  have "cs_fv (cs_sapply \<sigma> cs') \<subseteq>  cs_fv cs' - m_sdom \<sigma> \<union> m_svran \<sigma>"
+    using cs_fv_sapply_sdom_svran
+    by blast
+  have "m_sdom \<sigma> \<inter> m_svran \<sigma> = {}"
+    using m_lemma_3 m_un
+    by blast
+  then have "x \<notin> cs_fv ([] @ (cs_sapply \<sigma> cs'))"
+    using cs_fv_sapply_sdom_svran x_m_sdom
+    by fastforce
+  then show ?case
+    using "x_cs_fv"
+    unfolding cs_fv_def
+    by auto
+next
+  case (Ksub u x M \<sigma> A t)
+  then have "x_in_cs_fv": "x \<in> cs_fv (M | A \<triangleright> t # cs')"
+    unfolding cs_fv_def
+    by fastforce
+  have "x \<in> m_sdom \<sigma> - m_svran \<sigma>"
+    using Ksub.hyps
+    unfolding intruder_def
+    by simp
+  then have "x \<notin> cs_fv (cs_sapply \<sigma> ((M | A \<triangleright> t) # cs'))"
+    using Ksub.hyps cs_fv_sapply_sdom_svran
+    unfolding cs_fv_def cs_sapply_def
+    by blast
+  then show ?case
+    using x_in_cs_fv
+    unfolding cs_fv_def cs_sapply_def
+    by auto
+qed auto
 
 lemma "rer1_measure_lt": "rer1 c Var cs \<Longrightarrow> \<eta>2 cs < w c"
   sorry
