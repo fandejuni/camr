@@ -562,6 +562,12 @@ next
     by (metis (no_types, lifting) Cons.IH embed_eqs.elims list.discI list.inject m_sapply_eqs.simps(2) sapply_eq_system_equiv_def)
 qed
 
+lemma m_fv_sapply_sdom_svran:
+  assumes "x \<in> m_fv (m_sapply \<sigma> m)"
+  shows "x \<in> (m_fv m - m_sdom \<sigma>) \<union> m_svran \<sigma>"
+  using assms
+  by (metis embed_sapply fv_sapply_sdom_svran link_fv link_sdom link_svran)
+
 lemma m_lemma_3:
   assumes "m_unify U = Some \<sigma>"
   shows "m_fv_eqs (m_sapply_eqs \<sigma> U) \<subseteq> m_fv_eqs U"

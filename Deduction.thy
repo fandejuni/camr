@@ -75,6 +75,13 @@ lemma "c_sapply_id": "c_sapply Var = id"
     by simp
   done
 
+lemma "c_fv_sapply_sdom_svran":
+  assumes "x \<in> c_fv (c_sapply \<sigma> c)"
+  shows "x \<in> (c_fv c - m_sdom \<sigma>) \<union> m_svran \<sigma>"
+  using assms m_fv_sapply_sdom_svran
+  apply (cases c)
+  by simp blast
+
 fun c_derives :: "constraint \<Rightarrow> bool" where
   "c_derives (Constraint ms ms' msg) = (set ms \<union> set ms') \<turnstile> msg"
 
@@ -97,6 +104,21 @@ lemma "cs_sapply_id": "cs_sapply Var = id"
     unfolding cs_sapply_def
     by (simp add: c_sapply_id)
   done
+
+lemma "cs_fv_sapply_sdom_svran":
+  assumes "x \<in> cs_fv (cs_sapply \<sigma> cs)"
+  shows "x \<in> (cs_fv cs - m_sdom \<sigma>) \<union> m_svran \<sigma>"
+proof -
+  obtain "c" where "x \<in> c_fv (c_sapply \<sigma> c)" and $: "c \<in> set cs"
+    using assms
+    unfolding cs_fv_def cs_sapply_def
+    by auto
+  then have "x \<in> (c_fv c - m_sdom \<sigma>) \<union> m_svran \<sigma>"
+    using c_fv_sapply_sdom_svran
+    by blast
+  then show ?thesis
+    using $ cs_fv_def by auto
+qed
 
 definition cs_derives :: "constraint_system \<Rightarrow> bool" where
   "cs_derives cs = list_all c_derives cs"
@@ -300,8 +322,57 @@ definition \<eta>1 :: "constraint_system \<Rightarrow> nat" where
 definition \<eta>2 :: "constraint_system \<Rightarrow> nat" where
   "\<eta>2 cs = (\<Sum>c \<in> set cs. w c)"
 
+lemma "m_fv_intruder_sub": "\<sigma> = Var(x := intruder) \<Longrightarrow> m_fv (m_sapply \<sigma> m) \<subseteq> m_fv m"
+  unfolding intruder_def
+  by (induction m) auto
+
+lemma "c_fv_intruder_sub": "\<sigma> = Var(x := intruder) \<Longrightarrow> c_fv (c_sapply \<sigma> c) \<subseteq> c_fv c"
+  apply (cases c)
+  using m_fv_intruder_sub by fastforce+
+
+lemma "rer1_fv_sub_cs": "rer1 c \<sigma> cs \<Longrightarrow> cs_fv cs \<subseteq> cs_fv (c # cs')"
+  unfolding cs_fv_def cs_sapply_def
+  using c_fv_intruder_sub
+  apply -
+proof (induction rule: rer1.induct)
+  case (Ksub u x M \<sigma> A t)
+  then show ?case
+    apply safe
+    by (metis Union_iff image_iff list.distinct(1) list.set_cases list.set_intros(1) set_ConsD subsetCE)
+qed auto
+
+lemma "rer1_fv_sub_cs'": "rer1 c \<sigma> cs \<Longrightarrow> cs_fv (cs_sapply \<sigma> cs') \<subseteq> cs_fv (c # cs')"
+  unfolding cs_fv_def cs_sapply_def
+  using cs_sapply_id c_sapply_id
+  apply -
+proof (induction rule: rer1.induct)
+  case (Unif t M A \<sigma>)
+  then obtain "u" where $: "u \<in> set M \<union> set A" and "m_unify [(t, u)] = Some \<sigma>"
+    by auto
+  then have "m_svran \<sigma> \<subseteq> m_fv_eq (t, u)"
+    using m_lemma_3 m_fv_eqs.simps
+    by blast
+  then have "m_svran \<sigma> \<subseteq> c_fv (M | A \<triangleright> t)"
+    using $
+    by auto
+  then have "cs_fv (cs_sapply \<sigma> cs') \<subseteq> cs_fv cs' \<union> c_fv (M | A \<triangleright> t)"
+    using cs_fv_sapply_sdom_svran
+    by blast
+  then show ?case
+    unfolding cs_fv_def cs_sapply_def
+    by auto
+next
+  case (Ksub u x M \<sigma> A t)
+  show ?case
+    apply (rule subsetI)
+    apply simp
+    apply (rule disjI2)+
+    using Ksub.hyps(2) c_fv_intruder_sub by blast
+qed auto
+
 lemma "rer1_fv_sub": "rer1 c \<sigma> cs \<Longrightarrow> cs_fv (cs @ cs_sapply \<sigma> cs') \<subseteq> cs_fv (c # cs')"
-  sorry
+  unfolding cs_fv_def
+  using cs_fv_def rer1_fv_sub_cs rer1_fv_sub_cs' by auto
 
 lemma "rer1_fv_neq": "rer1 c \<sigma> cs \<Longrightarrow> \<sigma> \<noteq> Var \<Longrightarrow> cs_fv (cs @ cs_sapply \<sigma> cs') \<noteq> cs_fv (c # cs')"
   sorry
