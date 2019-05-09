@@ -144,7 +144,7 @@ inductive rer1 :: "constraint \<Rightarrow> m_subst \<Rightarrow> constraint_sys
 | Ksub: "rer1 ((Public_key_encrypt u (Var x) # M) | A \<triangleright> t) (Var(x := intruder)) {c_sapply (Var(x := intruder)) ((Public_key_encrypt u (Var x) # M) | A \<triangleright> t)}"
 
 inductive rer :: "constraint_system \<Rightarrow> m_subst \<Rightarrow> constraint_system \<Rightarrow> bool" ("_/\<leadsto>[_]/_" [73,73,73]72) where
-  Context: "rer1 c \<sigma> cs \<Longrightarrow> rer ({c} \<union> cs') \<sigma> (cs \<union> cs_sapply \<sigma> cs')"
+  Context: "rer1 c \<sigma> cs \<Longrightarrow> c \<notin> cs' \<Longrightarrow> rer ({c} \<union> cs') \<sigma> (cs \<union> cs_sapply \<sigma> cs')"
 
 inductive rer_star :: "constraint_system \<Rightarrow> m_subst \<Rightarrow> constraint_system \<Rightarrow> bool" ("_/\<leadsto>*[_]/_" [73,73,73]72) where
   Refl: "rer_star cs Var cs"
@@ -318,17 +318,22 @@ lemma "rer1_\<eta>1'": "rer cs \<sigma> cs' \<Longrightarrow> \<sigma> \<noteq> 
 
 lemma "rer1_\<eta>2": "rer cs \<sigma> cs' \<Longrightarrow> \<sigma> = Var \<Longrightarrow> finite cs \<Longrightarrow> \<eta>2 cs' < \<eta>2 cs"
   unfolding \<eta>2_def
-  apply (induction rule: rer.induct)
-  subgoal for c \<sigma> cs cs'
-    apply (cases "c \<in> cs'")
-    sorry
-  done
+proof (induction rule: rer.induct)
+  case (Context c \<sigma> cs cs')
+  then have eq: "sum w ({c} \<union> cs') = w c + sum w cs'"
+    by auto
+  have "sum w (cs \<union> cs_sapply \<sigma> cs') \<le> sum w cs + sum w cs'"
+    by (metis Context.prems(1) add.commute cs_sapply_id id_apply infinite_Un order_refl sum.infinite sum.union_inter trans_le_add1)
+  then show ?case
+    using Context.hyps(1) Context.prems(1) \<eta>2_def eq rer1_measure_lt
+    by fastforce
+qed
 
-lemma "rer_any_term": "rer_any cs' cs \<Longrightarrow> finite cs \<Longrightarrow> (cs', cs) \<in> term_rel"
+lemma "rer_any_term": "rer_any cs' cs \<Longrightarrow> (cs', cs) \<in> term_rel"
   unfolding term_rel_def
   by (metis in_measure mlex_leq mlex_less rer1_\<eta>1 rer1_\<eta>1' rer1_\<eta>2 rer_any.cases)
 
 theorem "rer_any_wf": "wfP rer_any"
-  by (metis rer_any.cases rer_any_term term_rel_wf wfE_min wfP_eq_minimal)
+  by (metis rer_any_term term_rel_wf wfE_min wfP_eq_minimal)
 
 end
