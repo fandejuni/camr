@@ -173,6 +173,9 @@ lemma link_fv:
         apply simp_all
   done
 
+lemma "m_fv_finite": "finite (m_fv msg)"
+  by (induction msg) auto
+
 type_synonym m_subst = "char list \<Rightarrow> msg"
 type_synonym m_eq = "msg \<times> msg"
 type_synonym m_eqs = "m_eq list"
@@ -205,6 +208,12 @@ lemma link_sapply:
   "m_sapply \<sigma> m = msg_of_term (sapply (embed \<circ> \<sigma>) (embed m))"
   apply (induction m)
         apply simp_all
+  done
+
+lemma "m_sapply_id": "m_sapply Var = id"
+  apply (rule ext)
+  subgoal for msg
+    by (induction msg) auto
   done
 
 fun m_sapply_eq :: "m_subst \<Rightarrow> m_eq \<Rightarrow> m_eq" where
