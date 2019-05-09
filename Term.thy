@@ -309,7 +309,7 @@ lemma embed_eq[simp]:
 lemma wf_subst_id:
   assumes "wf_subst arity \<tau>"
   shows "sapply (embed \<circ> msg_of_term \<circ> \<tau>) (embed m) = sapply \<tau> (embed m)"
-  by (metis assms comp_apply embed_msg_of_term sapply_cong wf_subst_def)
+  by (metis (mono_tags) assms comp_apply embed_msg_of_term wf_subst_def)
 
 lemma link_soundness:
   assumes "unifiess \<tau> (embed_eqs U)"
@@ -325,7 +325,7 @@ next
   have "unifies \<tau> (embed_eq a)"
     by (metis Cons.prems(1) embed_eqs.simps(2) list.discI list.inject unifiess.cases)
   moreover obtain "wf_term arity (embed (fst a))" and "wf_term arity (embed (snd a))"
-    by (metis embed_eq.cases embed_eq.elims embed_eq.simps fst_conv fst_swap le_boolD le_boolI' m_eq_of_eq.cases msg_of_term_embed old.prod.exhaust old.prod.inject snd_conv snd_eqD snd_swap sndsp.simps swap_simp wf_term_embed)
+    by (metis wf_term_embed)
   then obtain "wf_term arity (sapply \<tau> (embed (fst a)))" and "wf_term arity (sapply \<tau> (embed (snd a)))"
     using assms(3) wf_term_sapply by blast
   moreover have "sapply \<tau> (fst (embed_eq a)) = sapply \<tau> (snd (embed_eq a))"
@@ -367,7 +367,7 @@ proof -
     case (Cons a U)
     obtain "wf_term arity (embed (fst a))" and "wf_term arity (embed (snd a))" by simp
     then show ?case
-      by (metis Cons.IH embed_eq(1) embed_eq(2) embed_eqs.simps(2) le_boolD le_boolI' wf_eq_def wf_eqs.simps wf_term_embed)
+      by (metis Cons.IH embed_eq(1) embed_eq(2) embed_eqs.simps(2) wf_eq_def wf_eqs.simps wf_term_embed)
   qed
   then have "wf_subst arity \<tau>"
     using \<open>unify (embed_eqs U) = Some \<tau>\<close> wf_subst_unify by blast
@@ -430,7 +430,7 @@ lemma link_sdom:
 proof -
   have "m_sdom \<sigma> = {x. \<sigma> x \<noteq> msg.Var x}" by auto
   then have "... = {x. (embed \<circ> \<sigma>) x \<noteq> (embed \<circ> msg.Var) x}"
-    by (metis Collect_cong comp_apply msg_of_term_embed)
+    by (metis comp_apply msg_of_term_embed)
   then show ?thesis by auto
 qed
 
@@ -465,6 +465,18 @@ fun m_svran:: "m_subst \<Rightarrow> string set"
   where
 "m_svran \<sigma> = (\<Union>t\<in>(m_sran \<sigma>).(m_fv t))"
 
+lemma wf_term_embed_sran:
+  assumes "y \<in> sran (embed \<circ> \<sigma>)"
+  shows "wf_term arity y"
+proof -
+  have "y \<in> (\<Union>x\<in>sdom (embed \<circ> \<sigma>). {(embed \<circ> \<sigma>) x})" using assms by auto
+  obtain x where "y \<in> {(embed \<circ> \<sigma>) x}" and "x \<in> sdom (embed \<circ> \<sigma>)"
+    using \<open>y \<in> (\<Union>x\<in>sdom (Term.embed \<circ> \<sigma>). {(Term.embed \<circ> \<sigma>) x})\<close> by blast
+  then have "y = (embed \<circ> \<sigma>) x" by blast
+  moreover have "wf_subst arity (embed \<circ> \<sigma>)" by simp
+  then show ?thesis by (simp add: calculation)
+qed
+
 lemma link_svran:
   "m_svran \<sigma> = svran (embed \<circ> \<sigma>)"
 proof -
@@ -474,9 +486,72 @@ proof -
   then have "... =  (\<Union>x\<in>(sran (embed \<circ> \<sigma>)).(m_fv (msg_of_term x)))" by fastforce
   then have "... =  (\<Union>x\<in>(sran (embed \<circ> \<sigma>)).(fv ((embed \<circ> msg_of_term) x)))"
     using link_fv by auto
-  moreover have "\<forall>x\<in>(sran (embed \<circ> \<sigma>)). wf_term arity x" sorry
+  moreover have "\<forall>x\<in>(sran (embed \<circ> \<sigma>)). wf_term arity x"
+    using wf_term_embed_sran by blast
   then show ?thesis
     using \<open>(\<Union>t\<in>m_sran \<sigma>. m_fv t) = (\<Union>t\<in>msg_set_of_term_set (sran (Term.embed \<circ> \<sigma>)). m_fv t)\<close> \<open>(\<Union>t\<in>msg_set_of_term_set (sran (Term.embed \<circ> \<sigma>)). m_fv t) = (\<Union>x\<in>sran (Term.embed \<circ> \<sigma>). m_fv (msg_of_term x))\<close> calculation by auto
+qed
+
+lemma wf_embed_eqs:
+  "wf_eqs arity (embed_eqs U)"
+proof (induction U)
+  case Nil
+  then show ?case by (simp add: wf_eqs.intros(1))
+next
+  case (Cons a U)
+  obtain "wf_term arity (embed (fst a))" and "wf_term arity (embed (snd a))" by simp
+  then have "wf_eq arity (embed_eq a)" by (simp add: wf_eq_def)
+  then show ?case by (simp add: Cons.IH wf_eqs.intros(2))
+qed
+
+lemma msg_term_tau:
+  assumes "unify (embed_eqs U) = Some \<tau>"
+  and "\<sigma> = msg_of_term \<circ> \<tau>"
+  shows "embed \<circ> msg_of_term \<circ> \<tau> = \<tau>"
+proof (rule ext)
+  show "(embed \<circ> msg_of_term \<circ> \<tau>) t = \<tau> t" for t
+  proof -
+    have "wf_eqs arity (embed_eqs U)" by (simp add: wf_embed_eqs)
+    have "wf_subst arity \<tau>" using \<open>wf_eqs arity (embed_eqs U)\<close> assms(1) wf_subst_unify by auto
+    then have "wf_term arity (\<tau> t)" by (simp add: wf_subst_def)
+    then show ?thesis by simp
+  qed
+qed
+
+lemma embed_sapply:
+  "embed (m_sapply \<sigma> u) = (embed \<circ> \<sigma>) \<cdot> (embed u)"
+  by (simp add: link_sapply)
+
+(*
+lemma sapply_trivial:
+  "\<tau> \<cdot> (embed_eq (u, v)) = (\<tau> \<cdot> (embed u), \<tau> \<cdot> (embed v))"
+proof -
+  have "\<tau> \<cdot> (embed_eq (u, v)) = (\<tau> \<cdot> (fst (embed_eq (u, v))), \<tau> \<cdot> (snd (embed_eq (u, v))))" by simp
+  then have "... =  (\<tau> \<cdot> (embed (fst (u, v))), \<tau> \<cdot> (embed (snd (u, v))))" by simp
+  then show ?thesis by simp
+qed
+*)
+
+lemma m_sapply_embed:
+  "embed_eqs (m_sapply_eqs \<sigma> U) = (embed \<circ> \<sigma>) \<cdot> (embed_eqs U)"
+proof (induction U)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons a U)
+  have "embed_eq (m_sapply_eq \<sigma> a) = (embed \<circ> \<sigma>) \<cdot> (embed_eq a)"
+  proof -
+    obtain u and v where "a = (u, v)" by (meson surj_pair)
+    have "embed_eq (m_sapply_eq \<sigma> a) = (embed (m_sapply \<sigma> u), embed (m_sapply \<sigma> v))"
+      by (simp add: \<open>a = (u, v)\<close>)
+    then have "... = ((embed \<circ> \<sigma>) \<cdot> (embed u), (embed \<circ> \<sigma>) \<cdot> (embed v))" using embed_sapply by blast
+    then have "... = (embed \<circ> \<sigma>) \<cdot> (embed u, embed v)" by simp
+    then show ?thesis
+      using \<open>(Term.embed (m_sapply \<sigma> u), Term.embed (m_sapply \<sigma> v)) = ((Term.embed \<circ> \<sigma>) \<cdot> Term.embed u, (Term.embed \<circ> \<sigma>) \<cdot> Term.embed v)\<close> \<open>a = (u, v)\<close> \<open>embed_eq (m_sapply_eq \<sigma> a) = (Term.embed (m_sapply \<sigma> u), Term.embed (m_sapply \<sigma> v))\<close> embed_eq.simps by presburger
+  qed
+  then show ?case
+    by (metis (no_types, lifting) Cons.IH embed_eqs.elims list.discI list.inject m_sapply_eqs.simps(2) sapply_eq_system_equiv_def)
+qed
 
 lemma m_lemma_3:
   assumes "m_unify U = Some \<sigma>"
@@ -484,6 +559,46 @@ lemma m_lemma_3:
     and "m_sdom \<sigma> \<subseteq> m_fv_eqs U"
     and "m_svran \<sigma> \<subseteq> m_fv_eqs U"
     and "m_sdom \<sigma> \<inter> m_svran \<sigma> = {}"
-  sorry
+proof -
+  obtain \<tau> where "unify (embed_eqs U) = Some \<tau>" using assms by fastforce
+  moreover have "\<sigma> = msg_of_term \<circ> \<tau>" using \<open>unify (embed_eqs U) = Some \<tau>\<close> assms by auto
+  moreover show "m_sdom \<sigma> \<subseteq> m_fv_eqs U"
+  proof -
+    have "m_sdom \<sigma> = sdom (embed \<circ> msg_of_term \<circ> \<tau>)" using link_sdom
+      by (simp add: \<open>\<sigma> = msg_of_term \<circ> \<tau>\<close>)
+    then have "... = sdom \<tau>" using calculation msg_term_tau by auto
+    then have "... \<subseteq> fv_eq_system (embed_eqs U)" using calculation lemma_3_i_iii by blast
+    then show ?thesis using \<open>m_sdom \<sigma> = sdom (Term.embed \<circ> msg_of_term \<circ> \<tau>)\<close> link_fv_eqs by auto
+  qed
+  moreover show "m_svran \<sigma> \<subseteq> m_fv_eqs U"
+  proof -
+    have "m_svran \<sigma> = svran (embed \<circ> msg_of_term \<circ> \<tau>)"
+      using calculation(2) link_svran by auto
+    then have "... = svran \<tau>" using calculation(1) msg_term_tau by auto
+    then have "... \<subseteq> fv_eq_system (embed_eqs U)" using calculation lemma_3_i_iii by blast
+    then show ?thesis
+      using \<open>m_svran \<sigma> = svran (Term.embed \<circ> msg_of_term \<circ> \<tau>)\<close> \<open>svran (Term.embed \<circ> msg_of_term \<circ> \<tau>) = svran \<tau>\<close> link_fv_eqs by blast
+  qed
+  moreover show "m_fv_eqs (m_sapply_eqs \<sigma> U) \<subseteq> m_fv_eqs U"
+  proof -
+    have "m_fv_eqs (m_sapply_eqs \<sigma> U) = fv_eq_system (embed_eqs (m_sapply_eqs \<sigma> U))"
+      by (simp add: link_fv_eqs)
+    moreover have "embed_eqs (m_sapply_eqs \<sigma> U) = (embed \<circ> \<sigma>) \<cdot> (embed_eqs U)"
+      by (simp add: m_sapply_embed)
+    moreover have "fv_eq_system ((embed \<circ> \<sigma>) \<cdot> (embed_eqs U)) \<subseteq> fv_eq_system (embed_eqs U)"
+      by (metis \<open>\<sigma> = msg_of_term \<circ> \<tau>\<close> \<open>unify (embed_eqs U) = Some \<tau>\<close> comp_assoc lemma_3_i_iii msg_term_tau) 
+    then show ?thesis by (simp add: calculation(2) link_fv_eqs)
+  qed
+  moreover show "m_sdom \<sigma> \<inter> m_svran \<sigma> = {}"
+  proof -
+    have "m_sdom \<sigma> \<inter> m_svran \<sigma> =  sdom (embed \<circ> msg_of_term \<circ> \<tau>) \<inter> svran (embed \<circ> msg_of_term \<circ> \<tau>)"
+      using calculation(2) link_sdom link_svran by auto
+    then have "... = sdom \<tau> \<inter> svran \<tau>" using calculation(1) msg_term_tau by auto
+    moreover have "sdom \<tau> \<inter> svran \<tau> = {}"
+      by (metis \<open>unify (embed_eqs U) = Some \<tau>\<close> lemma_3_iv) 
+    then show ?thesis
+      using \<open>m_sdom \<sigma> \<inter> m_svran \<sigma> = sdom (Term.embed \<circ> msg_of_term \<circ> \<tau>) \<inter> svran (Term.embed \<circ> msg_of_term \<circ> \<tau>)\<close> calculation by blast
+  qed
+qed
 
 end
