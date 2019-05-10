@@ -22,8 +22,8 @@ inductive deduce :: "msg set \<Rightarrow> msg \<Rightarrow> bool" (infix "\<tur
 lemma "{Sym_encrypt m x, x} \<turnstile> m"
   by auto
 lemma "{Pair u1 u2} \<turnstile> Hash (Pair u2 u1)"
-  apply(rule Hash)
-    by(rule Pair) auto
+  apply (rule Hash)
+    by (rule Pair) auto
 lemma "{Sym_encrypt m k, Public_key_encrypt k intruder} \<turnstile> Pair m (Signature m intruder)"
   apply (rule Pair)
    apply (rule Sdec)
@@ -302,6 +302,9 @@ fun \<Theta> :: "msg \<Rightarrow> nat" where
 | "\<Theta> (Signature m k) = (if k = intruder then \<Theta> m + \<Theta> k + 1 else 1)"
 | "\<Theta> _ = 1"
 
+lemma "\<Theta>_pos": "\<Theta> m \<ge> 1"
+  by (induction m) auto
+
 fun \<chi> :: "msg \<Rightarrow> nat" where
   "\<chi> (Hash t) = \<chi> t + 1"
 | "\<chi> (Pair u v) = \<chi> u * \<chi> v + 1"
@@ -310,17 +313,58 @@ fun \<chi> :: "msg \<Rightarrow> nat" where
 | "\<chi> (Signature m k) = \<chi> m + 1"
 | "\<chi> _ = 1"
 
-definition \<chi>' :: "msg set \<Rightarrow> nat" where
-  "\<chi>' M = (\<Prod>m \<in> M. \<chi> m)"
+lemma "\<chi>_pos": "\<chi> m \<ge> 1"
+  by (induction m) auto
+
+definition \<chi>' :: "msg list \<Rightarrow> nat" where
+  "\<chi>' M = prod_list (map \<chi> M)"
+
+lemma "\<chi>'_pos": "\<chi>' M \<ge> 1"
+  unfolding \<chi>'_def
+  apply (induction M)
+   apply simp_all
+  using One_nat_def \<chi>_pos by presburger
+
+lemma "\<chi>'_incl": "m \<in> set M \<Longrightarrow> M' = removeAll m M \<Longrightarrow> \<chi>' (m # M') \<le> \<chi>' M"
+  unfolding \<chi>'_def
+  apply (induction M arbitrary: M')
+   apply simp
+  subgoal premises prems for a M M'
+  proof (cases "m = a")
+    case True
+    then have "M' = removeAll m M" using prems(3) by simp
+    then have "prod_list (map \<chi> M') \<le> prod_list (map \<chi> M)" by (metis \<chi>'_def \<chi>'_pos less_le_trans list.simps(8) list.simps(9) mult.commute mult.right_neutral nat_mult_le_cancel_disj not_le prems(1) prod_list.Cons prod_list.Nil removeAll_id)
+    then show ?thesis
+      using True
+      by simp
+  next
+    case False
+    then have "m \<in> set M" using prems False by simp
+    then have "prod_list (map \<chi> (m # a # (removeAll m M))) \<le> prod_list (map \<chi> (a # M))" using prems by auto
+    then show ?thesis
+      using False prems(3)
+      by simp
+  qed
+  done
+
+lemma "\<chi>'_pref": "\<chi>' P < \<chi>' P' \<Longrightarrow> \<chi>' (P @ M) < \<chi>' (P' @ M)"
+  unfolding "\<chi>'_def"
+  apply (induction M)
+   apply simp_all
+  using \<chi>_pos less_le_trans by auto
 
 fun w :: "constraint \<Rightarrow> nat" where
-  "w (M | A \<triangleright> t) = \<chi>' (set M) * \<Theta> t"
+  "w (M | A \<triangleright> t) = \<chi>' M * \<Theta> t"
+
+lemma "w_pos": "w c \<ge> 1"
+  using \<chi>'_pos \<Theta>_pos
+  by (metis (full_types) c_derives.cases less_one mult_is_0 not_less w.simps)
 
 definition \<eta>1 :: "constraint_system \<Rightarrow> nat" where
   "\<eta>1 cs = card (cs_fv cs)"
 
 definition \<eta>2 :: "constraint_system \<Rightarrow> nat" where
-  "\<eta>2 cs = (\<Sum>c \<in> set cs. w c)"
+  "\<eta>2 cs = sum_list (map w cs)"
 
 lemma "m_fv_intruder_sub": "\<sigma> = Var(x := intruder) \<Longrightarrow> m_fv (m_sapply \<sigma> m) \<subseteq> m_fv m"
   unfolding intruder_def
@@ -421,8 +465,71 @@ next
     by auto
 qed auto
 
-lemma "rer1_measure_lt": "rer1 c Var cs \<Longrightarrow> \<eta>2 cs < w c"
-  sorry
+lemma "rer1_measure_lt": "rer1 c \<sigma> cs \<Longrightarrow> \<sigma> = Var \<Longrightarrow> \<eta>2 cs < w c"
+  unfolding \<eta>2_def
+proof (induction rule: rer1.induct)
+  case (Unif t M A \<sigma>)
+  then have "sum_list (map w []) = 0" by simp
+  also have "0 < w (M | A \<triangleright> t)" using less_le_trans w_pos by blast
+  finally show ?case by blast
+next
+  case (Comp_Hash M A t)
+  then have "sum_list (map w [M | A \<triangleright> t]) = w (M | A \<triangleright> t)" by simp
+  also have "... = \<chi>' M * \<Theta> t" by simp
+  also have "... < \<chi>' M * \<Theta> (Hash t)" using \<chi>'_pos less_le_trans by auto
+  finally show ?case by auto
+next
+  case (Comp_Pair M A t1 t2)
+  then have "sum_list (map w [M | A \<triangleright> t1, M | A \<triangleright> t2]) = w (M | A \<triangleright> t1) + w (M | A \<triangleright> t2)" by simp
+  also have "... = \<chi>' M * \<Theta> t1 + \<chi>' M * \<Theta> t2" by simp
+  also have "... < \<chi>' M * \<Theta> (Pair t1 t2)" using \<chi>'_pos add_mult_distrib2 less_le_trans by fastforce
+  finally show ?case by auto
+next
+  case (Comp_Sym_encrypt M A m k)
+  then have "sum_list (map w [M | A \<triangleright> m, M | A \<triangleright> k]) = w (M | A \<triangleright> m) + w (M | A \<triangleright> k)" by simp
+  also have "... = \<chi>' M * \<Theta> m + \<chi>' M * \<Theta> k" by simp
+  also have "... < \<chi>' M * \<Theta> (Sym_encrypt m k)" using \<chi>'_pos add_mult_distrib2 less_le_trans by fastforce
+  finally show ?case by auto
+next
+  case (Comp_Public_key_encrypt M A m k)
+  have "sum_list (map w [M | A \<triangleright> m, M | A \<triangleright> k]) = w (M | A \<triangleright> m) + w (M | A \<triangleright> k)" by simp
+  also have "... = \<chi>' M * \<Theta> m + \<chi>' M * \<Theta> k" by simp
+  also have "... < \<chi>' M * \<Theta> (Public_key_encrypt m k)" using \<chi>'_pos add_mult_distrib2 less_le_trans by fastforce
+  finally show ?case by auto
+next
+  case (Comp_Signature M A t)
+  have "sum_list (map w [M | A \<triangleright> t]) = w (M | A \<triangleright> t)" by simp
+  also have "... < \<chi>' M * \<Theta> (Signature t intruder)" by (metis (full_types) \<Theta>.simps(5) le_add1 le_less_trans less_add_one mult_less_mono2 nat_0_less_mult_iff not_le w.simps w_pos zero_less_one)
+  finally show ?case by auto
+next
+  case (Proj u v M M' A t)
+  have "\<chi>'_pair": "\<chi>' [u, v] < \<chi>' [Pair u v]" unfolding \<chi>'_def by auto
+  have "sum_list (map w [(u # v # M') | (msg.Pair u v # A) \<triangleright> t]) = w ((u # v # M') | (msg.Pair u v # A) \<triangleright> t)" by simp
+  also have "... = \<chi>' (u # v # M') * \<Theta> t" by simp
+  also have "... < \<chi>' (Pair u v # M') * \<Theta> t" using "\<chi>'_pair" "\<chi>'_pref"[of "[u, v]" "[Pair u v]" "M'"] unfolding "\<chi>'_def" by (metis Cons_eq_appendI One_nat_def \<Theta>_pos less_le_trans mult_less_mono1 self_append_conv2 zero_less_Suc)
+  also have "... \<le> \<chi>' M * \<Theta> t" by (simp add: Proj.hyps \<chi>'_incl)
+  finally show ?case by auto
+next
+  case (Sdec u k M M' A t)
+  then have "sum_list (map w [(u # M') | (Sym_encrypt u k # A) \<triangleright> t, M' | (Sym_encrypt u k # A) \<triangleright> k]) = w ((u # M') | (Sym_encrypt u k # A) \<triangleright> t) + w (M' | (Sym_encrypt u k # A) \<triangleright> k)" by simp
+  also have "... = \<chi>' M' * \<chi> u * \<Theta> t + \<chi>' M' * \<Theta> k" by (simp add: \<chi>'_def)
+  also have "... < \<chi>' M' * \<chi> u * \<Theta> t + \<chi>' M' * (\<Theta> k + 1) * \<Theta> t" unfolding \<chi>'_def by (metis \<Theta>_pos \<chi>'_def add_strict_left_mono less_add_one less_le_trans mult.right_neutral mult_le_mono2 mult_less_mono2 nat_0_less_mult_iff w.simps w_pos)
+  also have "... = \<chi>' M' * (\<chi> u + \<Theta> k + 1) * \<Theta> t" by (simp add: mult.commute semiring_normalization_rules(34))
+  also have "... = \<chi>' M' * (\<chi> (Sym_encrypt u k)) * \<Theta> t" by simp
+  also have "... \<le> \<chi>' M * \<Theta> t" by (metis Sdec.hyps \<chi>'_def \<chi>'_incl list.simps(9) mult.commute mult_le_mono2 prod_list.Cons)
+  finally show ?case by auto
+next
+  case (Adec u M M' A t)
+  then have "sum_list (map w [(u # M') | (Public_key_encrypt u intruder # A) \<triangleright> t]) = w ((u # M') | (Public_key_encrypt u intruder # A) \<triangleright> t)" by simp
+  also have "... = \<chi>' M' * \<chi> u * \<Theta> t" by (simp add: \<chi>'_def)
+  also have "... < \<chi>' M' * (\<chi> u + 1) * \<Theta> t" using \<Theta>_pos \<chi>'_pos less_le_trans by fastforce
+  also have "... = \<chi>' M' * (\<chi> (Public_key_encrypt u intruder)) * \<Theta> t" by simp
+  also have "... \<le> \<chi>' M * \<Theta> t" by (metis (full_types) Adec.hyps(1) Adec.hyps(2) \<chi>'_def \<chi>'_incl list.simps(9) mult.commute mult_le_mono2 prod_list.Cons)
+  finally show ?case by auto
+next
+  case (Ksub u x M \<sigma> A t)
+  then show ?case unfolding intruder_def by (metis fun_upd_same msg.distinct(1))
+qed
 
 definition "term_rel" :: "(constraint_system \<times> constraint_system) set" where
   "term_rel = \<eta>1 <*mlex*> measure \<eta>2"
@@ -446,15 +553,11 @@ lemma "rer1_\<eta>2": "rer cs \<sigma> cs' \<Longrightarrow> \<sigma> = Var \<Lo
   unfolding \<eta>2_def
 proof (induction rule: rer.induct)
   case (Context c \<sigma> cs cs')
-  then have eq: "sum w (set (c # cs')) = w c + sum w (set cs')"
+  then have eq: "sum_list (map w (c # cs')) = w c + sum_list (map w cs')"
     by auto
-  have "cs_sapply \<sigma> cs' = cs'"
-    by (simp add: Context.prems cs_sapply_id)
-  then have "sum w (set (cs @ cs_sapply \<sigma> cs')) \<le> sum w (set cs) + sum w (set cs')"
-    by (metis List.finite_set le_add1 set_append sum.union_inter)
   then show ?case
     using Context.hyps(1) Context.prems(1) \<eta>2_def eq rer1_measure_lt
-    by fastforce
+    by (simp add: Context.prems cs_sapply_id)
 qed
 
 lemma "rer_any_term": "rer_any cs' cs \<Longrightarrow> (cs', cs) \<in> term_rel"
