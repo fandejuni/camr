@@ -12,18 +12,11 @@ datatype ('f , 'v) "term" = Var 'v | Fun 'f "('f, 'v) term list"
 
 fun fv :: "('f , 'v) term \<Rightarrow> 'v set" where
   "fv (Var x) = {x}"
-(* | "fv (Fun f l) = fold (\<union>) (map fv l) {}" *)
 | "fv (Fun f l) = (\<Union>x\<in>(set l).(fv x))"
 
 lemma equi_def_fv:
   "fv (Fun f l) = fold (\<union>) (map fv l) {}"
   by (metis Sup_set_fold fv.simps(2) set_map)
-
-(*
-lemma equi_def:
-  "fv (Fun f l) = (\<Union>x\<in>(set l).(fv x))"
-  by (metis Sup_set_fold fv.simps(2) set_map)
-*)
 
 value "fv (Fun (1 :: nat) [Var (0 :: nat), Var 1, Fun 2 [Var 2, Fun 3 [Var 5]]])"
 
@@ -59,9 +52,13 @@ lemma sapply_cong:
   assumes "\<And>x. x \<in> fv t \<Longrightarrow> \<sigma> x = \<tau> x"
   shows "\<sigma> \<cdot> t = \<tau> \<cdot> t"
   using assms
-  apply (induction t)
-   apply auto
-  done
+proof (induction t)
+  case (Var x)
+  then show ?case by simp
+next
+  case (Fun x1a x2)
+  then show ?case by auto
+qed
 
 fun scomp :: "('f, 'v) subst \<Rightarrow> ('f, 'v) subst \<Rightarrow> ('f, 'v) subst" (infixl "\<circ>s" 75)
   where
@@ -71,9 +68,13 @@ lemma scomp_sapply[simp]: "(\<sigma> \<circ>s \<tau> ) x = \<sigma> \<cdot>(\<ta
   by simp
 
 lemma sapply_scomp_distrib[simp]: "(\<sigma> \<circ>s \<tau> ) \<cdot> t = \<sigma> \<cdot> (\<tau> \<cdot> t)"
-  apply (induction t)
-   apply simp_all
-  done
+proof (induction t)
+  case (Var x)
+  then show ?case by simp
+next
+  case (Fun x1a x2)
+  then show ?case by simp
+qed
 
 lemma scomp_assoc[simp]: "(\<sigma> \<circ>s \<tau> ) \<circ>s q = \<sigma> \<circ>s (\<tau> \<circ>s q)"
 proof (rule ext)
@@ -170,6 +171,9 @@ qed
 lemma sdom_scomp[simp]: "sdom (\<sigma> \<circ>s \<tau> ) \<subseteq> sdom \<sigma> \<union> sdom \<tau>"
   by auto
 
+thm singleton_iff
+
+(* TODO *)
 lemma svran_scomp[simp]: "svran (\<sigma> \<circ>s \<tau> ) \<subseteq> svran \<sigma> \<union> svran \<tau>"
   apply (auto simp add: singleton_iff)
   by (metis fv.simps(1) sapply.simps(2) singletonD)
@@ -237,14 +241,10 @@ next
 qed
 
 lemma sapply_scomp_distrib_eq[simp]: "(\<sigma> \<circ>s \<tau>) \<cdot> (eq :: ('f, 'v) equation) = \<sigma> \<cdot> (\<tau> \<cdot> eq)"
-  apply auto
-  using sapply_scomp_distrib apply force+
-  done
+  using sapply_scomp_distrib by force+
 
 lemma sapply_scomp_distrib_eq_system[simp]: "(\<sigma> \<circ>s \<tau>) \<cdot> (s :: ('f, 'v) equations) = \<sigma> \<cdot> (\<tau> \<cdot> s)"
-  apply auto
-  using sapply_scomp_distrib apply force+
-  done
+  using sapply_scomp_distrib by force+
 
 (* 2. (b) *)
 
@@ -271,6 +271,16 @@ proof -
 qed
 
 lemma unifies_sapply_eq_sys: "unifiess \<sigma> (sapply_eq_system \<tau> U) \<longleftrightarrow> unifiess (\<sigma> \<circ>s \<tau> ) U"
+(*
+proof (induction U)
+  case Nil
+  then show ?case by (simp add: unifiess_empty)
+next
+  case (Cons a U)
+  then show ?case (* TODO*)
+qed
+*)
+
   apply (induction U)
    apply (simp add: unifiess_empty)
   apply auto
@@ -311,9 +321,13 @@ fun k2 :: "('f, 'v) equations \<Rightarrow> nat" where
 | "k2 (eq # U) = size_term (fst eq) + k2 U"
 
 lemma k2_def: "k2 U = fold (+) (map (size_term \<circ> fst) U) 0"
-  apply (induction U)
-   apply simp
-  by (simp add: fold_plus_sum_list_rev)
+proof (induction U)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons a U)
+  then show ?case by (simp add: fold_plus_sum_list_rev)
+qed
 
 lemma fold_union_basic: "fold (\<union>) l s = (fold (\<union>) l {}) \<union> s"
 proof -
@@ -365,6 +379,7 @@ next
   then show ?case by (metis Cons.IH UnE calculation(1))
 qed
 
+(* TODO *)
 lemma prelim_prelim_unify:
   assumes "y \<in> fv_eq (Var(x := t) \<cdot> a)"
   shows "y \<in> fold (\<union>) (map fv_eq (a # U)) (insert x (fv t))"
@@ -656,11 +671,20 @@ theorem soundness1:
   assumes "unify U = Some \<sigma>"
   shows "unifiess \<sigma> U"
   using assms
-  apply (induction arbitrary: \<sigma> rule: unify.induct)
-     apply (simp add: unifiess_empty)
-    apply (meson case_unify)
-  apply (metis list.discI list.sel(1) list.sel(3) prod.sel(1) prod.sel(2) unifies.simps unifiess.simps unify.simps(3))
-  by (simp add: case_fun)
+proof (induction arbitrary: \<sigma> rule: unify.induct)
+  case 1
+  then show ?case by (simp add: unifiess_empty)
+next
+  case (2 x t U)
+  then show ?case by (meson case_unify)
+next
+  case (3 v va y U)
+  then show ?case
+    by (metis list.discI list.sel(1) list.sel(3) prod.sel(1) prod.sel(2) unifies.simps unifiess.simps unify.simps(3))
+next
+  case (4 f u g v U)
+  then show ?case by (simp add: case_fun)
+qed
 
 (*
 
@@ -837,16 +861,6 @@ theorem soundness:
 
 
 
-
-
-
-
-
-
-
-
-
-
 (* (c). Formalize theorem 3 *)
 
 fun sum_liste :: "nat list \<Rightarrow> nat" where
@@ -857,12 +871,10 @@ lemma sum_liste_fold:
   "fold (+) (map f l) 0 = sum_liste (map f l)"
 proof (induction l)
   case Nil
-  then show ?case
-    by simp
+  then show ?case by simp
 next
   case (Cons a l)
-  then show ?case
-    by (simp add: fold_plus_sum_list_rev)
+  then show ?case by (simp add: fold_plus_sum_list_rev)
 qed
 
 lemma increasing_sum_liste:
@@ -1024,14 +1036,6 @@ theorem completeness:
 
 
 
-
-
-
-
-
-
-
-
 (* (d). Lemma 3 *)
 
 lemma simple_fv_eq_system_double_var:
@@ -1041,8 +1045,7 @@ proof -
   proof (rule subsetI)
     fix xa assume "xa \<in> ?A" then show "xa \<in> ?B"
     proof (cases "xa \<in> fv_eq_system U")
-      case True
-      then show ?thesis by simp
+      case True then show ?thesis by simp
     next
       case False
       have "xa = x \<or> xa = y"
@@ -1066,6 +1069,7 @@ proof -
   then show ?thesis using calculation by blast
 qed
 
+(* TODO *)
 lemma simple_fv_apply:
   "fv_eq_system (\<sigma> \<cdot> ((Var x, Var y) # U)) = fv (\<sigma> x) \<union> fv (\<sigma> y) \<union> fv_eq_system (\<sigma> \<cdot> U)"
   apply (auto simp add: SUP_union simple_fv_eq_system_double_var sup_assoc sup_left_commute)
@@ -1126,11 +1130,13 @@ proof -
     using \<open>fv_eq_system ((Fun f u, Fun g v) # U) = fv_eq (Fun f u, Fun g v) \<union> fv_eq_system U\<close> calculation by blast
 qed
 
+(* TODO *)
 lemma fv_subst_term:
   "fv (Var(x := t) \<cdot> tt) \<subseteq> fv t \<union> fv tt"
   apply (auto simp add: Diff_subset UnE UnI1 contra_subsetD fun_upd_idem_iff subsetI)
   by (metis (full_types) empty_subsetI fv.simps(1) insert_subset subsetCE)
 
+(* TODO *)
 lemma fv_subst_eq:
   "fv_eq (Var(x := t) \<cdot> eq) \<subseteq> fv t \<union> fv_eq eq"
   apply (auto simp add: fv_eq.elims fv_subst_term le_supI1 le_supI2 sup_assoc sup_left_commute)
@@ -1147,6 +1153,7 @@ next
   have "fv_eq_system (Var(x := t) \<cdot> (a # U)) = fv_eq (Var(x := t) \<cdot> a) \<union> fv_eq_system (Var(x := t) \<cdot> U)"
     by (metis fv_eq_system.elims list.simps(9) sapply_eq_system.elims simple_fold_map_first_elem)
   also have "... \<subseteq> fv t \<union> fv_eq a \<union> fv t \<union> fv_eq_system U"
+(* TODO *)
     apply -
     apply (auto simp add: Cons.IH Un_upper1 fv_subst_eq inf_sup_aci(5) subset_trans)
       apply (metis Cons.IH UnE fv_eq_system.simps map_map sapply_eq_system.elims subsetCE)
@@ -1209,11 +1216,6 @@ next
     case False
 
 (* CASE UNIFY *)
-
-(*
-    obtain \<sigma>2 where "unify (Var(x := t) \<cdot> ((Var x, t) # U)) = Some \<sigma>2"
-      by (metis (no_types, hide_lams) "2.prems" False completeness lifted_comp.elims option.discI soundness1 unifies_sapply_eq_sys unify.simps(2))
-*)
 
     obtain \<tau> where "unify (Var(x := t) \<cdot> U) = Some \<tau>"
       using "2.prems" False by force
@@ -1357,17 +1359,6 @@ next
   then show ?case
     by (metis option.discI unify.simps(4))
 qed
-
-
-
-
-
-
-
-
-
-
-
 
 
 

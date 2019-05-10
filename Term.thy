@@ -52,6 +52,7 @@ fun msg_of_term :: "(symbol, string) term \<Rightarrow> msg" where
 | "msg_of_term (Fun SSym_encrypt [t1, t2]) = Sym_encrypt (msg_of_term t1) (msg_of_term t2)"
 | "msg_of_term (Fun SPublic_key_encrypt [t1, t2]) = Public_key_encrypt (msg_of_term t1) (msg_of_term t2)"
 | "msg_of_term (Fun SSignature [t1, t2]) = Signature (msg_of_term t1) (msg_of_term t2)"
+| "msg_of_term _ = undefined"
 
 (* Three properties of embedding *)
 
@@ -92,8 +93,7 @@ qed
 
 lemma msg_of_term_embed [simp]: "msg_of_term (embed msg) = msg"
   apply (induction msg)
-        apply simp+
-  done
+  by simp_all
 
 lemma embed_msg_of_term [simp]:
   "wf_term arity t \<Longrightarrow> embed (msg_of_term t) = t"
@@ -170,8 +170,7 @@ fun m_fv :: "msg \<Rightarrow> string set" where
 lemma link_fv:
   "m_fv msg = fv (embed msg)"
   apply (induction msg)
-        apply simp_all
-  done
+  by simp_all
 
 lemma "m_fv_finite": "finite (m_fv msg)"
   by (induction msg) auto
@@ -207,14 +206,13 @@ fun m_sapply :: "m_subst \<Rightarrow> msg \<Rightarrow> msg"
 lemma link_sapply:
   "m_sapply \<sigma> m = msg_of_term (sapply (embed \<circ> \<sigma>) (embed m))"
   apply (induction m)
-        apply simp_all
-  done
+  by simp_all
 
 lemma "m_sapply_id": "m_sapply Var = id"
-  apply (rule ext)
-  subgoal for msg
-    by (induction msg) auto
-  done
+proof (rule ext)
+  fix msg
+  show "m_sapply msg.Var msg = id msg" by (induction msg) auto
+qed
 
 fun m_sapply_eq :: "m_subst \<Rightarrow> m_eq \<Rightarrow> m_eq" where
   "m_sapply_eq \<sigma> eq = (m_sapply \<sigma> (fst eq), m_sapply \<sigma> (snd eq))"
@@ -246,6 +244,7 @@ lemma link_sapply_eqs:
 inductive m_unifies :: "m_subst \<Rightarrow> m_eq \<Rightarrow> bool" where
   m_unifies_eq: "(m_sapply \<sigma> u = m_sapply \<sigma> t) \<Longrightarrow> m_unifies \<sigma> (u, t)"
 
+(* TODO *)
 lemma link_unifies:
   "m_unifies \<sigma> eq = unifies (embed \<circ> \<sigma>) (embed_eq eq)"
   apply (auto simp add: embed_eq.elims fstI link_sapply m_unifies.simps sndI unifies.simps)
@@ -258,9 +257,14 @@ inductive m_unifiess :: "m_subst \<Rightarrow> m_eqs \<Rightarrow> bool" where
 
 lemma link_unifiess:
   "m_unifiess \<sigma> U = unifiess (embed \<circ> \<sigma>) (embed_eqs U)"
-  apply (induction U)
-  apply (simp add: m_unifiess_empty unifiess_empty)
-  by (metis (mono_tags, lifting) embed_eqs.simps(2) link_unifies list.discI list.inject m_unifiess.simps unifiess.simps)
+proof (induction U)
+  case Nil
+  then show ?case by (simp add: m_unifiess_empty unifiess_empty)
+next
+  case (Cons a U)
+  then show ?case
+    by (metis (mono_tags, lifting) embed_eqs.simps(2) link_unifies list.discI list.inject m_unifiess.simps unifiess.simps)
+qed
 
 fun lift_subst :: "(symbol, string) subst option \<Rightarrow> m_subst option" where
   "lift_subst None = None"
@@ -309,11 +313,12 @@ lemma "m_sapply_comp": "m_sapply \<tau> (m_sapply \<sigma> m) = m_sapply (\<tau>
 lemma embed_eq[simp]:
   "fst (embed_eq eq) = embed (fst eq)"
   "snd (embed_eq eq) = embed (snd eq)"
-   apply (metis embed_eq.simps fstI prod.collapse)
-  by (metis embed_eq.simps prod.collapse sndI)
-
-(* lemma embed_msg_of_term [simp]:
-  "wf_term arity t \<Longrightarrow> embed (msg_of_term t) = t" *)
+proof -
+  show "fst (embed_eq eq) = embed (fst eq)"
+    by (metis embed_eq.simps fstI prod.collapse)
+  show "snd (embed_eq eq) = embed (snd eq)"
+    by (metis embed_eq.simps prod.collapse sndI)
+qed
 
 lemma wf_subst_id:
   assumes "wf_subst arity \<tau>"
@@ -530,16 +535,6 @@ qed
 lemma embed_sapply:
   "embed (m_sapply \<sigma> u) = (embed \<circ> \<sigma>) \<cdot> (embed u)"
   by (simp add: link_sapply)
-
-(*
-lemma sapply_trivial:
-  "\<tau> \<cdot> (embed_eq (u, v)) = (\<tau> \<cdot> (embed u), \<tau> \<cdot> (embed v))"
-proof -
-  have "\<tau> \<cdot> (embed_eq (u, v)) = (\<tau> \<cdot> (fst (embed_eq (u, v))), \<tau> \<cdot> (snd (embed_eq (u, v))))" by simp
-  then have "... =  (\<tau> \<cdot> (embed (fst (u, v))), \<tau> \<cdot> (embed (snd (u, v))))" by simp
-  then show ?thesis by simp
-qed
-*)
 
 lemma m_sapply_embed:
   "embed_eqs (m_sapply_eqs \<sigma> U) = (embed \<circ> \<sigma>) \<cdot> (embed_eqs U)"
