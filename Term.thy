@@ -92,8 +92,7 @@ next
 qed
 
 lemma msg_of_term_embed [simp]: "msg_of_term (embed msg) = msg"
-  apply (induction msg)
-  by simp_all
+  by (induction msg) simp_all
 
 lemma embed_msg_of_term [simp]:
   "wf_term arity t \<Longrightarrow> embed (msg_of_term t) = t"
@@ -148,8 +147,7 @@ qed
 
 (* Some properties *)
 
-lemma wf_subst_embed [simp]:
-  "wf_subst arity (embed \<circ> \<sigma>)"
+lemma wf_subst_embed [simp]: "wf_subst arity (embed \<circ> \<sigma>)"
   by (simp add: wf_subst_def)
 
 lemma msg_of_term_inject:
@@ -169,8 +167,7 @@ fun m_fv :: "msg \<Rightarrow> string set" where
 
 lemma link_fv:
   "m_fv msg = fv (embed msg)"
-  apply (induction msg)
-  by simp_all
+  by (induction msg) simp_all
 
 lemma "m_fv_finite": "finite (m_fv msg)"
   by (induction msg) auto
@@ -205,8 +202,7 @@ fun m_sapply :: "m_subst \<Rightarrow> msg \<Rightarrow> msg"
 
 lemma link_sapply:
   "m_sapply \<sigma> m = msg_of_term (sapply (embed \<circ> \<sigma>) (embed m))"
-  apply (induction m)
-  by simp_all
+  by (induction m) simp_all
 
 lemma "m_sapply_id": "m_sapply Var = id"
 proof (rule ext)
@@ -244,12 +240,16 @@ lemma link_sapply_eqs:
 inductive m_unifies :: "m_subst \<Rightarrow> m_eq \<Rightarrow> bool" where
   m_unifies_eq: "(m_sapply \<sigma> u = m_sapply \<sigma> t) \<Longrightarrow> m_unifies \<sigma> (u, t)"
 
-(* TODO *)
 lemma link_unifies:
   "m_unifies \<sigma> eq = unifies (embed \<circ> \<sigma>) (embed_eq eq)"
-  apply (auto simp add: embed_eq.elims fstI link_sapply m_unifies.simps sndI unifies.simps)
-   apply (metis embed_msg_of_term wf_subst_embed wf_term_embed wf_term_sapply)
-  by (metis embed_eq.elims old.prod.inject)
+proof -
+  have "\<And>u t. \<lbrakk>msg_of_term ((Term.embed \<circ> \<sigma>) \<cdot> Term.embed u) = msg_of_term ((Term.embed \<circ> \<sigma>) \<cdot> Term.embed t); eq = (u, t)\<rbrakk> \<Longrightarrow> (Term.embed \<circ> \<sigma>) \<cdot> Term.embed u = (Term.embed \<circ> \<sigma>) \<cdot> Term.embed t"
+    by (metis embed_msg_of_term wf_subst_embed wf_term_embed wf_term_sapply)
+  moreover have "\<And>u t. \<lbrakk>embed_eq eq = (u, t); (Term.embed \<circ> \<sigma>) \<cdot> u = (Term.embed \<circ> \<sigma>) \<cdot> t\<rbrakk> \<Longrightarrow> \<exists>u t. eq = (u, t) \<and> msg_of_term ((Term.embed \<circ> \<sigma>) \<cdot> Term.embed u) = msg_of_term ((Term.embed \<circ> \<sigma>) \<cdot> Term.embed t)"
+    by (metis embed_eq.elims old.prod.inject)
+  then show ?thesis
+    by (metis (no_types, lifting) calculation embed_eq.simps link_sapply m_unifies.simps unifies.cases unifies_eq)
+qed
 
 inductive m_unifiess :: "m_subst \<Rightarrow> m_eqs \<Rightarrow> bool" where
   m_unifiess_empty: "m_unifiess \<sigma> []"

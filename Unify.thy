@@ -173,10 +173,12 @@ lemma sdom_scomp[simp]: "sdom (\<sigma> \<circ>s \<tau> ) \<subseteq> sdom \<sig
 
 thm singleton_iff
 
-(* TODO *)
 lemma svran_scomp[simp]: "svran (\<sigma> \<circ>s \<tau> ) \<subseteq> svran \<sigma> \<union> svran \<tau>"
-  apply (auto simp add: singleton_iff)
-  by (metis fv.simps(1) sapply.simps(2) singletonD)
+proof -
+  have "\<And>x xa xb. \<lbrakk>xb \<in> fv (\<tau> xa); x \<in> fv (\<sigma> xb); \<forall>xa. \<tau> xa = Var xa \<or> x \<notin> fv (\<tau> xa); \<sigma> \<cdot> \<tau> xa \<noteq> Var xa\<rbrakk> \<Longrightarrow> \<exists>xa. \<sigma> xa \<noteq> Var xa \<and> x \<in> fv (\<sigma> xa)"
+    by (metis fv.simps(1) sapply.simps(2) singletonD)
+  then show ?thesis by (auto simp add: singleton_iff)
+qed
 
 (*
 --------------------------------------------------
@@ -271,23 +273,23 @@ proof -
 qed
 
 lemma unifies_sapply_eq_sys: "unifiess \<sigma> (sapply_eq_system \<tau> U) \<longleftrightarrow> unifiess (\<sigma> \<circ>s \<tau> ) U"
-(*
+
 proof (induction U)
   case Nil
   then show ?case by (simp add: unifiess_empty)
 next
   case (Cons a U)
-  then show ?case (* TODO*)
+  have "\<And>a b U. \<lbrakk>unifiess \<sigma> (map ((\<cdot>) \<tau>) U); unifiess (\<lambda>a. \<sigma> \<cdot> \<tau> a) U; unifiess \<sigma> ((\<tau> \<cdot> a, \<tau> \<cdot> b) # map ((\<cdot>) \<tau>) U)\<rbrakk> \<Longrightarrow> unifiess (\<lambda>a. \<sigma> \<cdot> \<tau> a) ((a, b) # U)"
+    by (metis (no_types, lifting) list.discI list.sel(1) prod.sel(1) prod.sel(2) sapply_cong sapply_scomp_distrib scomp.simps unifies.simps unifiess.simps)
+  moreover have "\<And>a b U. \<lbrakk>unifiess \<sigma> (map ((\<cdot>) \<tau>) U); unifiess (\<lambda>a. \<sigma> \<cdot> \<tau> a) U; unifiess (\<lambda>a. \<sigma> \<cdot> \<tau> a) ((a, b) # U)\<rbrakk> \<Longrightarrow> unifiess \<sigma> ((\<tau> \<cdot> a, \<tau> \<cdot> b) # map ((\<cdot>) \<tau>) U)"
+    by (metis (no_types, lifting) list.discI list.sel(1) prod.sel(1) prod.sel(2) sapply_cong sapply_scomp_distrib scomp.simps unifies.simps unifiess.simps)
+  moreover have "\<And>a b U. \<lbrakk>\<not> unifiess \<sigma> (map ((\<cdot>) \<tau>) U); \<not> unifiess (\<lambda>a. \<sigma> \<cdot> \<tau> a) U; unifiess \<sigma> ((\<tau> \<cdot> a, \<tau> \<cdot> b) # map ((\<cdot>) \<tau>) U)\<rbrakk> \<Longrightarrow> unifiess (\<lambda>a. \<sigma> \<cdot> \<tau> a) ((a, b) # U)"
+    using induct_rulify_fallback(2) unifiess.simps by auto
+  moreover have "\<And>a b U. \<lbrakk>\<not> unifiess \<sigma> (map ((\<cdot>) \<tau>) U); \<not> unifiess (\<lambda>a. \<sigma> \<cdot> \<tau> a) U; unifiess (\<lambda>a. \<sigma> \<cdot> \<tau> a) ((a, b) # U)\<rbrakk> \<Longrightarrow> unifiess \<sigma> ((\<tau> \<cdot> a, \<tau> \<cdot> b) # map ((\<cdot>) \<tau>) U)"
+    using induct_rulify_fallback(2) unifiess.simps by auto
+  then show ?case
+    by (metis Cons.IH list.discI list.sel(3) nth_Cons_0 sapply_eq_system_equiv_def unifies_sapply_eq unifiess.simps)
 qed
-*)
-
-  apply (induction U)
-   apply (simp add: unifiess_empty)
-  apply auto
-     apply (metis (no_types, lifting) list.discI list.sel(1) prod.sel(1) prod.sel(2) sapply_cong sapply_scomp_distrib scomp.simps unifies.simps unifiess.simps)
-    apply (metis (no_types, lifting) list.discI list.sel(1) prod.sel(1) prod.sel(2) sapply_cong sapply_scomp_distrib scomp.simps unifies.simps unifiess.simps)
-  using unifiess.cases apply auto[1]
-  using le_boolD ord_eq_le_trans unifiess.simps by blast
 
 (*
 --------------------------------------------------
@@ -379,14 +381,17 @@ next
   then show ?case by (metis Cons.IH UnE calculation(1))
 qed
 
-(* TODO *)
 lemma prelim_prelim_unify:
   assumes "y \<in> fv_eq (Var(x := t) \<cdot> a)"
   shows "y \<in> fold (\<union>) (map fv_eq (a # U)) (insert x (fv t))"
   using assms
-  apply auto
-  apply (metis (mono_tags, hide_lams) Sup_set_fold Un_iff Un_insert_right fold_union_basic fv.simps(1) fv_eq.simps inf_sup_aci(5) insert_iff singleton_iff)+
-  done
+proof -
+  have "\<And>xa. \<lbrakk>xa \<in> fv (fst a); y \<in> fv (if xa = x then t else Var xa)\<rbrakk> \<Longrightarrow> y \<in> fold (\<union>) (map fv_eq U) (insert x (fv (fst a) \<union> fv (snd a) \<union> fv t))"
+    by (metis (mono_tags, hide_lams) Sup_set_fold Un_iff Un_insert_right fold_union_basic fv.simps(1) fv_eq.simps inf_sup_aci(5) insert_iff singleton_iff)+
+  moreover have "\<And>xa. \<lbrakk>xa \<in> fv (snd a); y \<in> fv (if xa = x then t else Var xa)\<rbrakk> \<Longrightarrow> y \<in> fold (\<union>) (map fv_eq U) (insert x (fv (fst a) \<union> fv (snd a) \<union> fv t))"
+    by (metis (mono_tags, hide_lams) Sup_set_fold Un_iff Un_insert_right fold_union_basic fv.simps(1) fv_eq.simps inf_sup_aci(5) insert_iff singleton_iff)+
+  then show ?thesis using assms calculation by auto
+qed
 
 lemma prelim_unify_2:
   assumes "x \<notin> fv t"
@@ -1069,13 +1074,19 @@ proof -
   then show ?thesis using calculation by blast
 qed
 
-(* TODO *)
 lemma simple_fv_apply:
   "fv_eq_system (\<sigma> \<cdot> ((Var x, Var y) # U)) = fv (\<sigma> x) \<union> fv (\<sigma> y) \<union> fv_eq_system (\<sigma> \<cdot> U)"
-  apply (auto simp add: SUP_union simple_fv_eq_system_double_var sup_assoc sup_left_commute)
-     apply (metis UnE fold_union_basic)
-  using fold_union_basic apply fastforce+
-  done
+proof -
+  have "\<And>xa. \<lbrakk>xa \<in> fold (\<union>) (map (fv_eq \<circ> (\<cdot>) \<sigma>) U) (fv (\<sigma> x) \<union> fv (\<sigma> y)); xa \<notin> fv (\<sigma> x); xa \<notin> fold (\<union>) (map (fv_eq \<circ> (\<cdot>) \<sigma>) U) {}\<rbrakk> \<Longrightarrow> xa \<in> fv (\<sigma> y)"
+    by (metis UnE fold_union_basic)
+  moreover have "\<And>xa. xa \<in> fv (\<sigma> x) \<Longrightarrow> xa \<in> fold (\<union>) (map (fv_eq \<circ> (\<cdot>) \<sigma>) U) (fv (\<sigma> x) \<union> fv (\<sigma> y))"
+    using fold_union_basic by fastforce
+  moreover have "\<And>xa. xa \<in> fv (\<sigma> y) \<Longrightarrow> xa \<in> fold (\<union>) (map (fv_eq \<circ> (\<cdot>) \<sigma>) U) (fv (\<sigma> x) \<union> fv (\<sigma> y))"
+    using fold_union_basic by force
+  moreover have "\<And>xa. xa \<in> fold (\<union>) (map (fv_eq \<circ> (\<cdot>) \<sigma>) U) {} \<Longrightarrow> xa \<in> fold (\<union>) (map (fv_eq \<circ> (\<cdot>) \<sigma>) U) (fv (\<sigma> x) \<union> fv (\<sigma> y))"
+    using fold_union_basic by fastforce
+  then show ?thesis using calculation by (auto simp add: SUP_union simple_fv_eq_system_double_var sup_assoc sup_left_commute)
+qed
 
 lemma simple_fold_map_first_elem:
   "fold (\<union>) (map f (t # q)) {} = (f t) \<union> fold (\<union>) (map f q) {}"
@@ -1130,18 +1141,23 @@ proof -
     using \<open>fv_eq_system ((Fun f u, Fun g v) # U) = fv_eq (Fun f u, Fun g v) \<union> fv_eq_system U\<close> calculation by blast
 qed
 
-(* TODO *)
 lemma fv_subst_term:
   "fv (Var(x := t) \<cdot> tt) \<subseteq> fv t \<union> fv tt"
-  apply (auto simp add: Diff_subset UnE UnI1 contra_subsetD fun_upd_idem_iff subsetI)
-  by (metis (full_types) empty_subsetI fv.simps(1) insert_subset subsetCE)
+proof -
+  have "\<And>xa xaa. \<lbrakk>xaa \<in> fv tt; xa \<in> fv (if xaa = x then t else Var xaa); xa \<notin> fv tt\<rbrakk> \<Longrightarrow> xa \<in> fv t"
+    by (metis fv.simps(1) singletonD)
+  then show ?thesis by auto
+qed
 
-(* TODO *)
 lemma fv_subst_eq:
   "fv_eq (Var(x := t) \<cdot> eq) \<subseteq> fv t \<union> fv_eq eq"
-  apply (auto simp add: fv_eq.elims fv_subst_term le_supI1 le_supI2 sup_assoc sup_left_commute)
-   apply (metis (mono_tags, hide_lams) UnI1 fv.simps(1) insert_iff insert_is_Un)+
-  done
+proof -
+  have "\<And>xa xaa. \<lbrakk>xaa \<in> fv (fst eq); xa \<in> fv (if xaa = x then t else Var xaa); xa \<notin> fv t; xa \<notin> fv (snd eq)\<rbrakk> \<Longrightarrow> xa \<in> fv (fst eq)"
+    by (metis fv.simps(1) singletonD)
+  moreover have "\<And>xa xaa. \<lbrakk>xaa \<in> fv (snd eq); xa \<in> fv (if xaa = x then t else Var xaa); xa \<notin> fv t; xa \<notin> fv (snd eq)\<rbrakk> \<Longrightarrow> xa \<in> fv (fst eq)"
+    by (metis fv.simps(1) singletonD)
+  then show ?thesis using calculation by (auto simp add: fv_eq.elims fv_subst_term le_supI1 le_supI2 sup_assoc sup_left_commute)
+qed
 
 lemma fv_subst_eqs:
   "fv_eq_system (Var(x := t) \<cdot> U) \<subseteq> fv t \<union> fv_eq_system U"
@@ -1153,12 +1169,15 @@ next
   have "fv_eq_system (Var(x := t) \<cdot> (a # U)) = fv_eq (Var(x := t) \<cdot> a) \<union> fv_eq_system (Var(x := t) \<cdot> U)"
     by (metis fv_eq_system.elims list.simps(9) sapply_eq_system.elims simple_fold_map_first_elem)
   also have "... \<subseteq> fv t \<union> fv_eq a \<union> fv t \<union> fv_eq_system U"
-(* TODO *)
-    apply -
-    apply (auto simp add: Cons.IH Un_upper1 fv_subst_eq inf_sup_aci(5) subset_trans)
-      apply (metis Cons.IH UnE fv_eq_system.simps map_map sapply_eq_system.elims subsetCE)
-     apply (metis (full_types) fv.simps(1) singletonD)+
-    done
+  proof -
+    have "\<And>xa. \<lbrakk>xa \<in> fold (\<union>) (map (fv_eq \<circ> (\<cdot>) (Var(x := t))) U) {}; xa \<notin> fold (\<union>) (map fv_eq U) {}; xa \<notin> fv t; xa \<notin> fv (snd a)\<rbrakk> \<Longrightarrow> xa \<in> fv (fst a)"
+      by (metis Cons.IH UnE fv_eq_system.simps map_map sapply_eq_system.elims subsetCE)
+    moreover have "\<And>xa xaa. \<lbrakk>xaa \<in> fv (fst a); xa \<in> fv (if xaa = x then t else Var xaa); xa \<notin> fold (\<union>) (map fv_eq U) {}; xa \<notin> fv t; xa \<notin> fv (snd a)\<rbrakk> \<Longrightarrow> xa \<in> fv (fst a)"
+      by (metis fv.simps(1) singletonD)
+    moreover have "\<And>xa xaa. \<lbrakk>xaa \<in> fv (snd a); xa \<in> fv (if xaa = x then t else Var xaa); xa \<notin> fold (\<union>) (map fv_eq U) {}; xa \<notin> fv t; xa \<notin> fv (snd a)\<rbrakk> \<Longrightarrow> xa \<in> fv (fst a)"
+      by (metis fv.simps(1) singletonD)
+    then show ?thesis using calculation by (auto simp add: Cons.IH Un_upper1 fv_subst_eq inf_sup_aci(5) subset_trans)
+  qed
   then show ?case
     by (metis (no_types, lifting) calculation fv_eq_system.elims inf_sup_aci(5) simple_fold_map_first_elem sup_assoc sup_left_idem)
 qed
