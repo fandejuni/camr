@@ -41,12 +41,35 @@ lemma "c_suc_rer1": "(cs, \<sigma>) \<in> set (c_succ c) \<Longrightarrow> rer1 
   unfolding c_succ_def
   using c_comp_rer1 c_dec_rer1 c_unify_rer1 by auto
 
+fun "cs_succ_aux" :: "constraint_system \<Rightarrow> constraint_system \<Rightarrow> (constraint_system \<times> m_subst) list" where
+  "cs_succ_aux _ [] = []"
+| "cs_succ_aux cs' (c # cs'') = (let css = c_succ c in map (\<lambda>(cs, \<sigma>). (cs_sapply \<sigma> cs' @ cs @ cs_sapply \<sigma> cs'', \<sigma>)) css @
+                                cs_succ_aux (cs' @ [c]) cs'')"
+
+lemma "cs_succ_aux_rer": "(ocs, \<sigma>) \<in> set (cs_succ_aux pcs ics) \<Longrightarrow> rer (pcs @ ics) \<sigma> ocs"
+  apply (induction ics arbitrary: pcs)
+   apply simp
+  subgoal for c ics pcs
+    apply (cases "(ocs, \<sigma>) \<in> set (cs_succ_aux (pcs @ [c]) ics)")
+     apply fastforce
+    subgoal premises prems
+    proof -
+      obtain cs where "rer1 c \<sigma> cs" and "ocs = cs_sapply \<sigma> pcs @ cs @ cs_sapply \<sigma> ics"
+        using c_suc_rer1 prems
+        by auto
+      then show ?thesis using prems
+        using Context
+        by blast
+    qed
+    done
+  done
+
 definition "cs_succ" :: "constraint_system \<Rightarrow> (constraint_system \<times> m_subst) list" where
-  "cs_succ ics = List.maps (\<lambda>c. let (css, cs') = (c_succ c, removeAll c ics) in map (\<lambda>(cs, \<sigma>). (cs @ cs_sapply \<sigma> cs', \<sigma>)) css) ics"
+  "cs_succ cs = cs_succ_aux [] cs"
 
 lemma "cs_succ_rer": "(cs, \<sigma>) \<in> set (cs_succ ics) \<Longrightarrow> rer ics \<sigma> cs"
   unfolding cs_succ_def
-  sorry
+  using cs_succ_aux_rer by fastforce
 
 (* 9. (b) *)
 

@@ -173,7 +173,7 @@ inductive rer1 :: "constraint \<Rightarrow> m_subst \<Rightarrow> constraint_sys
 | Ksub: "Public_key_encrypt u (Var x) \<in> set M \<Longrightarrow> \<sigma> = Var(x := intruder) \<Longrightarrow> rer1 (M | A \<triangleright> t) \<sigma> [c_sapply \<sigma> (M | A \<triangleright> t)]"
 
 inductive rer :: "constraint_system \<Rightarrow> m_subst \<Rightarrow> constraint_system \<Rightarrow> bool" ("_/\<leadsto>[_]/_" [73,73,73]72) where
-  Context: "rer1 c \<sigma> cs \<Longrightarrow> rer (cs' @ (c # cs'')) \<sigma> (cs @ cs_sapply \<sigma> (cs' @ cs''))"
+  Context: "rer1 c \<sigma> cs \<Longrightarrow> rer (cs' @ (c # cs'')) \<sigma> (cs_sapply \<sigma> cs' @ cs @ cs_sapply \<sigma> cs'')"
 
 inductive rer_star :: "constraint_system \<Rightarrow> m_subst \<Rightarrow> constraint_system \<Rightarrow> bool" ("_/\<leadsto>*[_]/_" [73,73,73]72) where
   Refl: "rer_star cs Var cs"
@@ -392,7 +392,7 @@ lemma "rer1_fv_sub_cs": "rer1 c \<sigma> cs \<Longrightarrow> cs_fv cs \<subsete
   using rer1_fv_sub_cs_aux
   using cs_fv_def by fastforce
 
-lemma "rer1_fv_sub_cs'": "rer1 c \<sigma> cs \<Longrightarrow> cs_fv (cs_sapply \<sigma> (cs' @ cs'')) \<subseteq> cs_fv (cs' @ (c # cs''))"
+lemma "rer1_fv_sub_cs'": "rer1 c \<sigma> cs \<Longrightarrow> cs_fv (cs_sapply \<sigma> cs' @ cs_sapply \<sigma> cs'') \<subseteq> cs_fv (cs' @ (c # cs''))"
   unfolding cs_fv_def cs_sapply_def
   using cs_sapply_id c_sapply_id
   apply -
@@ -420,12 +420,12 @@ next
     using Ksub.hyps(2) c_fv_intruder_sub by blast
 qed auto
 
-lemma "rer1_fv_sub": "rer1 c \<sigma> cs \<Longrightarrow> cs_fv (cs @ cs_sapply \<sigma> (cs' @ cs'')) \<subseteq> cs_fv (cs' @ (c # cs''))"
+lemma "rer1_fv_sub": "rer1 c \<sigma> cs \<Longrightarrow> cs_fv (cs_sapply \<sigma> cs' @ cs @ cs_sapply \<sigma> cs'') \<subseteq> cs_fv (cs' @ (c # cs''))"
   using rer1_fv_sub_cs rer1_fv_sub_cs'
   unfolding cs_fv_def
   by auto
 
-lemma "rer1_fv_neq": "rer1 c \<sigma> cs \<Longrightarrow> \<sigma> \<noteq> Var \<Longrightarrow> cs_fv (cs @ cs_sapply \<sigma> (cs' @ cs'')) \<noteq> cs_fv (cs' @ (c # cs''))"
+lemma "rer1_fv_neq": "rer1 c \<sigma> cs \<Longrightarrow> \<sigma> \<noteq> Var \<Longrightarrow> cs_fv (cs_sapply \<sigma> cs' @ cs @ cs_sapply \<sigma> cs'') \<noteq> cs_fv (cs' @ (c # cs''))"
 proof (induction rule: rer1.induct)
   case (Unif t M A \<sigma>)
   then obtain "u" "x" where $: "u \<in> set M \<union> set A" and "m_un": "m_unify [(t, u)] = Some \<sigma>" and "x_m_sdom": "x \<in> m_sdom \<sigma>"
@@ -439,15 +439,15 @@ proof (induction rule: rer1.induct)
     unfolding cs_fv_def
     using "x_m_sdom"
     by auto
-  have "cs_fv (cs_sapply \<sigma> (cs' @ cs'')) \<subseteq>  cs_fv (cs' @ cs'') - m_sdom \<sigma> \<union> m_svran \<sigma>"
+  have "cs_sub": "cs_fv (cs_sapply \<sigma> cs' @ cs_sapply \<sigma> cs'') \<subseteq> cs_fv (cs' @ cs'') - m_sdom \<sigma> \<union> m_svran \<sigma>"
     using cs_fv_sapply_sdom_svran
-    by blast
+    by (simp add: cs_sapply_def subsetI)
   have "m_sdom \<sigma> \<inter> m_svran \<sigma> = {}"
     using m_lemma_3 m_un
     by blast
-  then have "x \<notin> cs_fv ([] @ (cs_sapply \<sigma> (cs' @ cs'')))"
-    using cs_fv_sapply_sdom_svran x_m_sdom
-    by fastforce
+  then have "x \<notin> cs_fv (cs_sapply \<sigma> cs' @ [] @ cs_sapply \<sigma> cs'')"
+    using cs_fv_sapply_sdom_svran cs_sub x_m_sdom
+    by auto
   then show ?case
     using "x_cs_fv"
     unfolding cs_fv_def
