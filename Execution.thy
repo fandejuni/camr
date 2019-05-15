@@ -5,10 +5,38 @@ begin
 (* 9. (a) *)
 
 fun c_unify :: "constraint \<Rightarrow> (constraint_system \<times> m_subst) list" where
-  "c_unify (M | A \<triangleright> t) = List.maps (\<lambda>u. case m_unify [(t, u)] of Some \<sigma> \<Rightarrow> [([], \<sigma>)] | _ \<Rightarrow> []) (M @ A)"
+  "c_unify (M | A \<triangleright> (Var _)) = []"
+| "c_unify (M | A \<triangleright> t) = concat (map (\<lambda>u. case m_unify [(t, u)] of Some \<sigma> \<Rightarrow> [([], \<sigma>)] | _ \<Rightarrow> []) (M @ A))"
 
-lemma "c_unify_rer1": "(cs, \<sigma>) \<in> set (c_unify c) \<Longrightarrow> rer1 c \<sigma> cs"
-  sorry
+lemma "c_unify_m_unify":
+  assumes "(cs, \<sigma>) \<in> set (c_unify (M | A \<triangleright> t))"
+  shows "cs = []" and "\<exists>u \<in> set (M @ A). m_unify [(t, u)] = Some \<sigma>"
+proof -
+  obtain "u" where "u \<in> set (M @ A)" and $: "(cs, \<sigma>) \<in> set (case m_unify [(t, u)] of Some \<sigma> \<Rightarrow> [([], \<sigma>)] | _ \<Rightarrow> [])"
+    using assms
+    apply (cases t)
+    by force+
+  then show "cs = []" and "\<exists>u \<in> set (M @ A). m_unify [(t, u)] = Some \<sigma>"
+    by auto
+qed
+
+lemma "c_unify_rer1":
+  assumes "(cs, \<sigma>) \<in> set (c_unify (M | A \<triangleright> t))"
+  shows "rer1 (M | A \<triangleright> t) \<sigma> cs"
+  proof -
+    have "not_is_var": "\<not>is_var t"
+      using assms is_var.simps
+      by auto
+    have "cs_empty": "cs = []"
+      using assms c_unify_m_unify
+      by blast
+    then obtain u where "u \<in> set (M @ A)" and "m_unify [(t, u)] = Some \<sigma>"
+      using assms c_unify_m_unify
+      by blast
+    then show ?thesis
+      using not_is_var cs_empty Unif
+      by fastforce
+  qed
 
 fun c_comp :: "constraint \<Rightarrow> (constraint_system \<times> m_subst) list" where
   "c_comp (M | A \<triangleright> Hash t) = [([M | A \<triangleright> t], Var)]"
@@ -39,7 +67,8 @@ definition "c_succ" :: "constraint \<Rightarrow> (constraint_system \<times> m_s
 
 lemma "c_suc_rer1": "(cs, \<sigma>) \<in> set (c_succ c) \<Longrightarrow> rer1 c \<sigma> cs"
   unfolding c_succ_def
-  using c_comp_rer1 c_dec_rer1 c_unify_rer1 by auto
+  using c_comp_rer1 c_dec_rer1 c_unify_rer1 c_derives.cases
+  by (metis UnE set_append)
 
 fun "cs_succ_aux" :: "constraint_system \<Rightarrow> constraint_system \<Rightarrow> (constraint_system \<times> m_subst) list" where
   "cs_succ_aux _ [] = []"
