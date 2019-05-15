@@ -161,16 +161,16 @@ lemma "sol_snd": "\<tau> \<in> sol [c1, c2] \<Longrightarrow> \<tau> \<in> sol [
 (* 7. (c) *)
 
 inductive rer1 :: "constraint \<Rightarrow> m_subst \<Rightarrow> constraint_system \<Rightarrow> bool" ("_/\<leadsto>\<^sub>1[_]/_" [64,64,64]63) where
-  Unif: "\<not>is_var t \<Longrightarrow> \<exists>u \<in> set M \<union> set A. m_unify [(t, u)] = Some \<sigma>  \<Longrightarrow> rer1 (M | A \<triangleright> t) \<sigma> []"
-| Comp_Hash: "rer1 (M | A \<triangleright> Hash t) Var [M | A \<triangleright> t]"
-| Comp_Pair: "rer1 (M | A \<triangleright> Pair t1 t2) Var [M | A \<triangleright> t1, M | A \<triangleright> t2]"
-| Comp_Sym_encrypt: "rer1 (M | A \<triangleright> Sym_encrypt m k) Var [M | A \<triangleright> m, M | A \<triangleright> k]"
-| Comp_Public_key_encrypt: "rer1 (M | A \<triangleright> Public_key_encrypt m k) Var [M | A \<triangleright> m, M | A \<triangleright> k]"
-| Comp_Signature: "rer1 (M | A \<triangleright> Signature t intruder) Var [M | A \<triangleright> t]"
-| Proj: "Pair u v \<in> set M \<Longrightarrow> M' = removeAll (Pair u v) M \<Longrightarrow> rer1 (M | A \<triangleright> t) Var [(u # v # M') | (Pair u v # A) \<triangleright> t]"
-| Sdec: "Sym_encrypt u k \<in> set M \<Longrightarrow> M' = removeAll (Sym_encrypt u k) M \<Longrightarrow> rer1 (M | A \<triangleright> t) Var [(u # M') | (Sym_encrypt u k # A) \<triangleright> t, M' | (Sym_encrypt u k # A) \<triangleright> k]"
-| Adec: "Public_key_encrypt u intruder \<in> set M \<Longrightarrow> M' = removeAll (Public_key_encrypt u intruder) M \<Longrightarrow> rer1 (M | A \<triangleright> t) Var [(u # M') | (Public_key_encrypt u intruder # A) \<triangleright> t]"
-| Ksub: "Public_key_encrypt u (Var x) \<in> set M \<Longrightarrow> \<sigma> = Var(x := intruder) \<Longrightarrow> rer1 (M | A \<triangleright> t) \<sigma> [c_sapply \<sigma> (M | A \<triangleright> t)]"
+  Unif[intro]: "\<not>is_var t \<Longrightarrow> \<exists>u \<in> set M \<union> set A. m_unify [(t, u)] = Some \<sigma>  \<Longrightarrow> rer1 (M | A \<triangleright> t) \<sigma> []"
+| Comp_Hash[intro]: "rer1 (M | A \<triangleright> Hash t) Var [M | A \<triangleright> t]"
+| Comp_Pair[intro]: "rer1 (M | A \<triangleright> Pair t1 t2) Var [M | A \<triangleright> t1, M | A \<triangleright> t2]"
+| Comp_Sym_encrypt[intro]: "rer1 (M | A \<triangleright> Sym_encrypt m k) Var [M | A \<triangleright> m, M | A \<triangleright> k]"
+| Comp_Public_key_encrypt[intro]: "rer1 (M | A \<triangleright> Public_key_encrypt m k) Var [M | A \<triangleright> m, M | A \<triangleright> k]"
+| Comp_Signature[intro]: "rer1 (M | A \<triangleright> Signature t intruder) Var [M | A \<triangleright> t]"
+| Proj[intro]: "Pair u v \<in> set M \<Longrightarrow> M' = removeAll (Pair u v) M \<Longrightarrow> rer1 (M | A \<triangleright> t) Var [(u # v # M') | (Pair u v # A) \<triangleright> t]"
+| Sdec[intro]: "Sym_encrypt u k \<in> set M \<Longrightarrow> M' = removeAll (Sym_encrypt u k) M \<Longrightarrow> rer1 (M | A \<triangleright> t) Var [(u # M') | (Sym_encrypt u k # A) \<triangleright> t, M' | (Sym_encrypt u k # A) \<triangleright> k]"
+| Adec[intro]: "Public_key_encrypt u intruder \<in> set M \<Longrightarrow> M' = removeAll (Public_key_encrypt u intruder) M \<Longrightarrow> rer1 (M | A \<triangleright> t) Var [(u # M') | (Public_key_encrypt u intruder # A) \<triangleright> t]"
+| Ksub[intro]: "Public_key_encrypt u (Var x) \<in> set M \<Longrightarrow> \<sigma> = Var(x := intruder) \<Longrightarrow> rer1 (M | A \<triangleright> t) \<sigma> [c_sapply \<sigma> (M | A \<triangleright> t)]"
 
 inductive rer :: "constraint_system \<Rightarrow> m_subst \<Rightarrow> constraint_system \<Rightarrow> bool" ("_/\<leadsto>[_]/_" [73,73,73]72) where
   Context: "rer1 c \<sigma> cs \<Longrightarrow> rer (cs' @ (c # cs'')) \<sigma> (cs_sapply \<sigma> cs' @ cs @ cs_sapply \<sigma> cs'')"
@@ -181,11 +181,12 @@ inductive rer_star :: "constraint_system \<Rightarrow> m_subst \<Rightarrow> con
 
 (* 7. (d) *)
 
-inductive c_simple :: "constraint \<Rightarrow> bool" where
-  "c_simple (M | A \<triangleright> (Var _))"
+fun c_simple :: "constraint \<Rightarrow> bool" where
+  "c_simple (M | A \<triangleright> (Var _)) = True"
+| "c_simple _ = False"
 
 definition cs_simple :: "constraint_system \<Rightarrow> bool" where
-  "cs_simple cs = list_all c_simple cs"
+  "cs_simple cs = (\<forall>c \<in> set cs. c_simple c)"
 
 definition red :: "constraint_system \<Rightarrow> m_subst set" where
   "red cs = {m_scomp \<tau> \<sigma> | \<tau> \<sigma>. \<exists>cs'. rer_star cs \<sigma> cs' \<and> cs_simple cs' \<and> \<tau> \<in> sol cs'}"
