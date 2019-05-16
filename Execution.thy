@@ -156,7 +156,58 @@ proof -
 qed
 
 lemma "c_rer1_succ": "rer1 c \<sigma> cs \<Longrightarrow> (cs, \<sigma>) \<in> set (c_succ c)"
-  sorry
+proof (induction rule: rer1.induct)
+  case (Unif t M A \<sigma>)
+  then obtain u where "u \<in> set (M @ A)" and "m_unify [(t, u)] = Some \<sigma>"
+    by auto
+  then have "([], \<sigma>) \<in> set (List.maps (\<lambda>u. case m_unify [(t, u)] of Some \<sigma> \<Rightarrow> [([], \<sigma>)] | None \<Rightarrow> []) (M @ A))"
+    using exists_maps[of "M @ A" "([], \<sigma>)" "(\<lambda>u. case m_unify [(t, u)] of Some \<sigma> \<Rightarrow> [([], \<sigma>)] | None \<Rightarrow> [])"]
+    by force
+  then have "([], \<sigma>) \<in> set (c_unify (M | A \<triangleright> t))"
+    using Unif(1) is_var.intros
+    apply (cases t)
+    by force+
+  then show ?case
+    by (simp add: c_succ_def)
+next
+  case (Proj u v M M' A t)
+  then have "c_dec_term (M | A \<triangleright> t) (Pair u v) = [([(u # v # M') | (Pair u v # A) \<triangleright> t], Var)]"
+    by simp
+  then have "([(u # v # M') | (Pair u v # A) \<triangleright> t], Var) \<in> set (c_dec (M | A \<triangleright> t))"
+    using exists_maps
+    by (metis (full_types) Proj.hyps(1) c_dec.simps list.set_intros(1))
+  then show ?case
+    by (simp add: c_succ_def)
+next
+  case (Sdec u k M M' A t)
+  then have "c_dec_term (M | A \<triangleright> t) (Sym_encrypt u k) = [([(u # M') | (Sym_encrypt u k # A) \<triangleright> t, M' | (Sym_encrypt u k # A) \<triangleright> k], Var)]"
+    using c_dec_term.simps(2)
+    by metis
+  then have "([(u # M') | (Sym_encrypt u k # A) \<triangleright> t, M' | (Sym_encrypt u k # A) \<triangleright> k], Var) \<in> set (c_dec (M | A \<triangleright> t))"
+    using exists_maps
+    by (metis (full_types) Sdec.hyps(1) c_dec.simps list.set_intros(1))
+  then show ?case
+    by (simp add: c_succ_def)
+next
+  case (Adec u M M' A t)
+  then have "c_dec_term (M | A \<triangleright> t) (Public_key_encrypt u (Cons \<iota>)) = [([(u # M') | (Public_key_encrypt u intruder # A) \<triangleright> t], Var)]"
+    by simp
+  then have "([(u # M') | (Public_key_encrypt u intruder # A) \<triangleright> t], Var) \<in> set (c_dec (M | A \<triangleright> t))"
+    using exists_maps
+    by (metis (full_types) Adec.hyps(1) c_dec.simps intruder_def list.set_intros(1))
+  then show ?case
+    by (simp add: c_succ_def)
+next
+  case (Ksub u x M \<sigma> A t)
+  then have "c_dec_term (M | A \<triangleright> t) (Public_key_encrypt u (Var x)) = [([c_sapply \<sigma> (M | A \<triangleright> t)], \<sigma>)]"
+    using c_dec_term.simps(4)
+    by metis
+  then have "([c_sapply \<sigma> (M | A \<triangleright> t)], \<sigma>) \<in> set (c_dec (M | A \<triangleright> t))"
+    using exists_maps
+    by (metis (full_types) Ksub.hyps(1) c_dec.simps list.set_intros(1))
+  then show ?case
+    by (simp add: c_succ_def)
+qed (simp add: c_succ_def intruder_def)+
 
 fun "cs_succ_aux" :: "constraint_system \<Rightarrow> constraint_system \<Rightarrow> (constraint_system \<times> m_subst) list" where
   "cs_succ_aux _ [] = []"
@@ -249,7 +300,7 @@ value "map_option (\<lambda>(cs, \<sigma>). (cs, map (\<lambda>v. (v, \<sigma> v
 
 lemma "search_sound":
   assumes "search ics = Some (cs', \<sigma>'')"
-  shows "cs_simple cs' \<and> rer_star ics \<sigma>'' cs'"
+  shows "rer_star ics \<sigma>'' cs' \<and> cs_simple cs'"
   using assms
   apply (induction arbitrary: cs' \<sigma>'' rule: search.induct)
   subgoal premises prems for ics cs' \<sigma>''
