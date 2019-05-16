@@ -8,6 +8,15 @@ fun "fold_option" :: "('a \<Rightarrow> 'b option) \<Rightarrow> 'a list \<Right
   "fold_option f [] = None"
 | "fold_option f (a # as) = (case f a of Some b \<Rightarrow> Some b | None \<Rightarrow> fold_option f as)"
 
+lemma "fold_option_cong"[fundef_cong]: "xs = ys \<Longrightarrow> (\<And>a. a \<in> set xs \<Longrightarrow> f a = f' a) \<Longrightarrow> fold_option f xs = fold_option f' ys"
+proof (induction xs arbitrary: ys)
+  case (Cons a as)
+  then obtain a' as' where "ys = a' # as'"
+    by blast
+  then show ?case
+    by (metis Cons.IH Cons.prems(1) Cons.prems(2) fold_option.simps(2) list.set_intros(1) list.set_intros(2))
+qed simp
+
 lemma "fold_option_exists":
   assumes "fold_option f as = Some b"
   shows "\<exists>a \<in> set as. f a = Some b"
@@ -188,7 +197,7 @@ function search :: "constraint_system \<Rightarrow> (constraint_system \<times> 
 termination
   apply (relation "{(x, y). rer_any x y}")
   using rer_any_wf wfP_def apply blast
-  sorry
+  using cs_succ_rer_any by auto
 
 (* 9. (c) *)
 
