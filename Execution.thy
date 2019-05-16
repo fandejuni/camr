@@ -192,7 +192,7 @@ lemma "cs_succ_rer_any": "(cs, \<sigma>) \<in> set (cs_succ ics) \<Longrightarro
 
 function search :: "constraint_system \<Rightarrow> (constraint_system \<times> m_subst) option" where
   "search ics = (if cs_simple ics then Some (ics, Var)
-                 else fold_option (\<lambda>(cs, \<sigma>). case search cs of Some (cs', \<sigma>') \<Rightarrow> Some (cs', m_scomp \<sigma> \<sigma>') | None \<Rightarrow> None) (cs_succ ics))"
+                 else fold_option (\<lambda>(cs, \<sigma>). case search cs of Some (cs', \<sigma>') \<Rightarrow> Some (cs', m_scomp \<sigma>' \<sigma>) | None \<Rightarrow> None) (cs_succ ics))"
   by pat_completeness auto
 termination
   apply (relation "{(x, y). rer_any x y}")
@@ -211,5 +211,45 @@ value "search [[Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Pair (Va
                [Public_key_encrypt (Pair (Var ''NA1'') (Cons ''nb1'')) (Cons ''a''), Public_key_encrypt (Pair (Cons ''na0'') (Var ''A0'')) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Public_key_encrypt (Pair (Cons ''na0'') (Var ''NB0'')) (Var ''A0''),
                [Public_key_encrypt (Var ''NB0'') (Var ''B0''), Public_key_encrypt (Pair (Var ''NA1'') (Cons ''nb1'')) (Cons ''a''), Public_key_encrypt (Pair (Cons ''na0'') (Var ''A0'')) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Public_key_encrypt (Cons ''nb1'') (Cons ''b''),
                [Public_key_encrypt (Var ''NB0'') (Var ''B0''), Public_key_encrypt (Pair (Var ''NA1'') (Cons ''nb1'')) (Cons ''a''), Public_key_encrypt (Pair (Cons ''na0'') (Var ''A0'')) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Pair (Var ''NA1'') (Cons ''nb1'')]"
+
+(* 10. (a) *)
+
+lemma "search_sound":
+  assumes "search ics = Some (cs', \<sigma>'')"
+  shows "cs_simple cs' \<and> rer_star ics \<sigma>'' cs'"
+  using assms
+  apply (induction ics arbitrary: cs' \<sigma>'' rule: search.induct)
+  subgoal premises prems for ics cs' \<sigma>''
+    using prems
+    proof (cases "cs_simple ics")
+      case False
+      then have "search ics = fold_option (\<lambda>(cs, \<sigma>). case search cs of Some (cs', \<sigma>') \<Rightarrow> Some (cs', m_scomp \<sigma>' \<sigma>) | None \<Rightarrow> None) (cs_succ ics)"
+        by simp
+      then have "fold_option (\<lambda>(cs, \<sigma>). case search cs of Some (cs', \<sigma>') \<Rightarrow> Some (cs', m_scomp \<sigma>' \<sigma>) | None \<Rightarrow> None) (cs_succ ics) = Some (cs', \<sigma>'')"
+        using prems(2)
+        by simp
+      then obtain cs \<sigma> where $: "(cs, \<sigma>) \<in> set (cs_succ ics)" and "(case search cs of Some (cs', \<sigma>') \<Rightarrow> Some (cs', m_scomp \<sigma>' \<sigma>) | None \<Rightarrow> None) = Some (cs', \<sigma>'')"
+        using fold_option_exists[of "(\<lambda>(cs, \<sigma>). case search cs of Some (cs', \<sigma>') \<Rightarrow> Some (cs', m_scomp \<sigma>' \<sigma>) | None \<Rightarrow> None)" "(cs_succ ics)" "(cs', \<sigma>'')"]
+        by auto
+      then obtain \<sigma>' where "search cs = Some (cs', \<sigma>')" and "m_scomp_sigma": "\<sigma>'' = m_scomp \<sigma>' \<sigma>"
+        by (cases "search cs") auto
+      then have "sub": "cs_simple cs' \<and> rer_star cs \<sigma>' cs'"
+        using prems(1) False $
+        by blast
+      have "rer ics \<sigma> cs"
+        using $
+        by (simp add: cs_succ_rer)
+      then show ?thesis
+        using m_scomp_sigma sub Trans
+        by blast
+    qed (simp add: Refl)
+    done
+
+(* 10. (b) *)
+
+lemma "search_complete":
+  assumes "cs_simple cs'" and "rer_star cs \<sigma> cs'"
+  shows "search cs = Some x"
+  sorry
 
 end
