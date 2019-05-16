@@ -155,10 +155,31 @@ proof -
     using assms c_unify_rer1 c_comp_rer1 c_dec_rer1 c_succ_def by auto
 qed
 
+lemma "c_rer1_succ": "rer1 c \<sigma> cs \<Longrightarrow> (cs, \<sigma>) \<in> set (c_succ c)"
+  sorry
+
 fun "cs_succ_aux" :: "constraint_system \<Rightarrow> constraint_system \<Rightarrow> (constraint_system \<times> m_subst) list" where
   "cs_succ_aux _ [] = []"
 | "cs_succ_aux cs' (c # cs'') = map (\<lambda>(cs, \<sigma>). (cs_sapply \<sigma> cs' @ cs @ cs_sapply \<sigma> cs'', \<sigma>)) (c_succ c)
                               @ cs_succ_aux (cs' @ [c]) cs''"
+
+lemma "cs_rer_succ_aux":
+  assumes "rer1 c \<sigma> cs"
+  shows "(cs_sapply \<sigma> (pcs @ cs') @ cs @ cs_sapply \<sigma> cs'', \<sigma>) \<in> set (cs_succ_aux pcs (cs' @ [c] @ cs''))"
+proof (induction cs' arbitrary: pcs)
+  case Nil
+  have "(cs, \<sigma>) \<in> set (c_succ c)"
+    using assms c_rer1_succ
+    by simp
+  then show ?case
+    using Nil
+    by auto
+next
+  case (Cons a cs')
+  then show ?case
+    using Cons[of "pcs @ [a]"]
+    by simp
+qed
 
 lemma "cs_succ_aux_rer":
   assumes "(ocs, \<sigma>) \<in> set (cs_succ_aux pcs ics)"
@@ -184,6 +205,14 @@ lemma "cs_succ_rer": "(cs, \<sigma>) \<in> set (cs_succ ics) \<Longrightarrow> r
   unfolding cs_succ_def
   using cs_succ_aux_rer by fastforce
 
+lemma "cs_rer_succ": "rer ics \<sigma> cs \<Longrightarrow> (cs, \<sigma>) \<in> set (cs_succ ics)"
+  unfolding cs_succ_def
+  apply (induction rule: rer.induct)
+  subgoal for c \<sigma> cs cs' cs''
+    using cs_rer_succ_aux[of c \<sigma> cs "[]" cs' cs'']
+    by simp
+  done
+
 (* 9. (b) *)
 
 lemma "cs_succ_rer_any": "(cs, \<sigma>) \<in> set (cs_succ ics) \<Longrightarrow> rer_any cs ics"
@@ -201,16 +230,20 @@ termination
 
 (* 9. (c) *)
 
-value "search [[Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Pair (Var ''A0'') (Var ''B0''),
-               [Public_key_encrypt (Pair (Cons ''k0'') (Signature (Cons ''k0'') (Var ''A0''))) (Cons ''b''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Public_key_encrypt (Pair (Var ''K1'') (Signature (Var ''K1'') (Cons ''a''))) (Cons ''b''),
-               [Sym_encrypt (Cons ''m1'') (Var ''K1''), Public_key_encrypt (Pair (Cons ''k0'') (Signature (Cons ''k0'') (Var ''A0''))) (Cons ''b''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Sym_encrypt (Var ''Z0'') (Cons ''k0''),
-               [Sym_encrypt (Cons ''m1'') (Var ''K1''), Public_key_encrypt (Pair (Cons ''k0'') (Signature (Cons ''k0'') (Var ''A0''))) (Cons ''b''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Pair (Var ''K1'') (Cons ''m1'')]"
+definition KTP :: "constraint_system" where
+  "KTP = [[Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Pair (Var ''A0'') (Var ''B0''),
+               [Public_key_encrypt (Pair (Cons ''k0'') (Signature (Cons ''k0'') (Var ''A0''))) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Public_key_encrypt (Pair (Var ''K1'') (Signature (Var ''K1'') (Cons ''a''))) (Cons ''b''),
+               [Sym_encrypt (Cons ''m1'') (Var ''K1''), Public_key_encrypt (Pair (Cons ''k0'') (Signature (Cons ''k0'') (Var ''A0''))) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Sym_encrypt (Var ''Z0'') (Cons ''k0''),
+               [Sym_encrypt (Cons ''m1'') (Var ''K1''), Public_key_encrypt (Pair (Cons ''k0'') (Signature (Cons ''k0'') (Var ''A0''))) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Pair (Var ''K1'') (Cons ''m1'')]"
+value "map_option (\<lambda>(cs, \<sigma>). (cs, map (\<lambda>v. (v, \<sigma> v)) [''A0'', ''B0'', ''K1'', ''Z0''])) (search KTP)"
 
-value "search [[Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Pair (Var ''A0'') (Var ''B0''),
+definition NSPK :: "constraint_system" where
+  "NSPK = [[Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Pair (Var ''A0'') (Var ''B0''),
                [Public_key_encrypt (Pair (Cons ''na0'') (Var ''A0'')) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Public_key_encrypt (Pair (Var ''NA1'') (Cons ''a'')) (Cons ''b''),
                [Public_key_encrypt (Pair (Var ''NA1'') (Cons ''nb1'')) (Cons ''a''), Public_key_encrypt (Pair (Cons ''na0'') (Var ''A0'')) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Public_key_encrypt (Pair (Cons ''na0'') (Var ''NB0'')) (Var ''A0''),
                [Public_key_encrypt (Var ''NB0'') (Var ''B0''), Public_key_encrypt (Pair (Var ''NA1'') (Cons ''nb1'')) (Cons ''a''), Public_key_encrypt (Pair (Cons ''na0'') (Var ''A0'')) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Public_key_encrypt (Cons ''nb1'') (Cons ''b''),
                [Public_key_encrypt (Var ''NB0'') (Var ''B0''), Public_key_encrypt (Pair (Var ''NA1'') (Cons ''nb1'')) (Cons ''a''), Public_key_encrypt (Pair (Cons ''na0'') (Var ''A0'')) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Pair (Var ''NA1'') (Cons ''nb1'')]"
+value "map_option (\<lambda>(cs, \<sigma>). (cs, map (\<lambda>v. (v, \<sigma> v)) [''A0'', ''B0'', ''NA1'', ''NB0''])) (search NSPK)"
 
 (* 10. (a) *)
 
@@ -218,7 +251,7 @@ lemma "search_sound":
   assumes "search ics = Some (cs', \<sigma>'')"
   shows "cs_simple cs' \<and> rer_star ics \<sigma>'' cs'"
   using assms
-  apply (induction ics arbitrary: cs' \<sigma>'' rule: search.induct)
+  apply (induction arbitrary: cs' \<sigma>'' rule: search.induct)
   subgoal premises prems for ics cs' \<sigma>''
     using prems
     proof (cases "cs_simple ics")
@@ -248,8 +281,30 @@ lemma "search_sound":
 (* 10. (b) *)
 
 lemma "search_complete":
-  assumes "cs_simple cs'" and "rer_star cs \<sigma> cs'"
-  shows "search cs = Some x"
-  sorry
+  assumes "rer_star ics \<sigma>'' cs'" and "cs_simple cs'"
+  shows "\<exists>x. search ics = Some x"
+  using assms
+  apply (induction rule: rer_star.induct)
+   apply simp
+  subgoal premises prems for ics \<sigma> cs \<sigma>' cs'
+    using prems
+    proof (cases "cs_simple ics")
+      case False
+      have $: "(cs, \<sigma>) \<in> set (cs_succ ics)"
+        using prems(1)
+        by (simp add: cs_rer_succ)
+      obtain css' \<sigma>s' where "search cs = Some (css', \<sigma>s')"
+        using prems
+        by auto
+      then have "\<exists>x \<in> set (cs_succ ics). \<not>Option.is_none ((\<lambda>(cs, \<sigma>). case search cs of Some (cs', \<sigma>') \<Rightarrow> Some (cs', m_scomp \<sigma>' \<sigma>) | None \<Rightarrow> None) x)"
+        using $
+        by force
+      then have "\<exists>z. z \<noteq> None \<and> search ics = z"
+        using False exists_fold_option[of "(cs_succ ics)" "(\<lambda>(cs, \<sigma>). case search cs of Some (cs', \<sigma>') \<Rightarrow> Some (cs', m_scomp \<sigma>' \<sigma>) | None \<Rightarrow> None)"]
+        by (simp add: Option.is_none_def)
+      then show ?thesis
+        by blast
+    qed simp
+    done
 
 end
