@@ -121,11 +121,6 @@ lemma sdom_Var [simp]: "sdom Var = {}"
 lemma svran_Var [simp]: "svran Var = {}"
   by simp
 
-lemma sdom_single_non_trivial [simp]:
-  assumes "t \<noteq> Var x"
-  shows "sdom (Var(x:=t)) = {x}"
-  using assms by simp
-
 lemma svran_single_non_trivial [simp]:
   assumes "t \<noteq> Var x"
   shows "svran (Var(x:=t)) = fv t"
@@ -133,10 +128,6 @@ lemma svran_single_non_trivial [simp]:
 
 lemma fold_union_map[intro]:
   "\<lbrakk> x \<in> (fold (\<union>) (map f l) {}) \<rbrakk> \<Longrightarrow> x \<in> (\<Union>y\<in>(set l).f y)"
-  by (metis Sup_set_fold set_map)
-
-lemma fold_union_map_rev[elim]:
-  "\<lbrakk> x \<in> (\<Union>y\<in>(set l).f y) \<rbrakk> \<Longrightarrow>  x \<in> (fold (\<union>) (map f l) {})"
   by (metis Sup_set_fold set_map)
 
 lemma fv_fun[simp]: "fv (Fun f l) = (\<Union> x \<in> (set l). fv x)" by simp
@@ -1511,6 +1502,6 @@ next
     by (metis (no_types, lifting) "4.prems" \<open>length u = length v\<close> list.discI list.sel(1) map_fst_zip map_snd_zip wf_eqs.cases wf_fun_zip)
   also have "wf_eqs arity U" using "4.prems" wf_eqs.cases by fastforce
   then show ?case using "4.IH" "4.prems"(1) \<open>f = g\<close> \<open>length u = length v\<close> calculation wf_eqs_two_parts by auto
-  qed
+qed
 
 end
