@@ -10,6 +10,7 @@ definition \<iota> :: string where
 definition intruder :: msg where
   "intruder = Cons \<iota>"
 
+(* Intruder deduction rules from Fig. 1 *)
 inductive deduce :: "msg set \<Rightarrow> msg \<Rightarrow> bool" (infix "\<turnstile>" 72) where
   Ax[intro]: "u \<in> T \<Longrightarrow> T \<turnstile> u"
 | Proj1[intro]: "T \<turnstile> Pair u1 u2 \<Longrightarrow> T \<turnstile> u1"
@@ -22,6 +23,7 @@ inductive deduce :: "msg set \<Rightarrow> msg \<Rightarrow> bool" (infix "\<tur
 | Sdec[intro]: "T \<turnstile> Sym_encrypt m k \<Longrightarrow> T \<turnstile> k \<Longrightarrow> T \<turnstile> m"
 | Adec[intro]: "T \<turnstile> Public_key_encrypt m intruder \<Longrightarrow> T \<turnstile> m"
 
+(* examples from the project description *)
 lemma "{Sym_encrypt m x, x} \<turnstile> m"
   by auto
 lemma "{Pair u1 u2} \<turnstile> Hash (Pair u2 u1)"
@@ -38,28 +40,33 @@ lemma "{Sym_encrypt m k, Public_key_encrypt k intruder} \<turnstile> Pair m (Sig
 
 (* 6. (b) *)
 
-lemma deduce_weaken:
-  assumes "G \<turnstile> t" and "G \<subseteq> H"
-  shows "H \<turnstile> t"
-  using assms
-  by (induction rule: deduce.induct) auto
-
+(* helper lemma for deduce_cut *)
 lemma deduce_cut_aux:
   assumes "T \<turnstile> u" and "H \<turnstile> t" and "T = insert t H"
   shows "H \<turnstile> u"
   using assms
   by (induction rule: deduce.induct) auto
 
+(* Lemma 4. (i) *)
 lemma deduce_cut:
   assumes "insert t H \<turnstile> u" and "H \<turnstile> t"
   shows "H \<turnstile> u"
   using assms deduce_cut_aux by blast
 
+(* Lemma 4. (ii) *)
+lemma deduce_weaken:
+  assumes "G \<turnstile> t" and "G \<subseteq> H"
+  shows "H \<turnstile> t"
+  using assms
+  by (induction rule: deduce.induct) auto
+
 (* 7. (a) *)
 
+(* Definition 1. *)
 datatype constraint = Constraint "msg list" "msg list" "msg" ("((2_/|_)/\<triangleright>_)" [67,67,67]66)
 type_synonym constraint_system = "constraint list"
 
+(* free variables of a constraint *)
 fun c_fv :: "constraint \<Rightarrow> string set" where
   "c_fv (Constraint ms ms' msg) = \<Union>(m_fv ` (set ms \<union> set ms' \<union> {msg}))"
 
@@ -67,9 +74,11 @@ lemma "c_fv_finite": "finite (c_fv c)"
   apply (cases c)
   by (simp add: m_fv_finite)
 
+(* c_sapply applies a message substitution to a constraint *)
 fun c_sapply :: "m_subst \<Rightarrow> constraint \<Rightarrow> constraint" where
   "c_sapply \<sigma> (Constraint ms ms' msg) = Constraint (map (m_sapply \<sigma>) ms) (map (m_sapply \<sigma>) ms') (m_sapply \<sigma> msg)"
 
+(* applying identity substitution is just the identity on the constraints *)
 lemma "c_sapply_id": "c_sapply Var = id"
   apply (rule ext)
   subgoal for c
@@ -78,6 +87,7 @@ lemma "c_sapply_id": "c_sapply Var = id"
     by simp
   done
 
+(* lifted Lemma 1 *)
 lemma "c_fv_sapply_sdom_svran":
   assumes "x \<in> c_fv (c_sapply \<sigma> c)"
   shows "x \<in> (c_fv c - m_sdom \<sigma>) \<union> m_svran \<sigma>"
@@ -85,6 +95,7 @@ lemma "c_fv_sapply_sdom_svran":
   apply (cases c)
   by simp blast
 
+(* c_derives checks if a constraint is satisfied w.r.t. intruder deduction rules *)
 fun c_derives :: "constraint \<Rightarrow> bool" where
   "c_derives (Constraint ms ms' msg) = (set ms \<union> set ms') \<turnstile> msg"
 
@@ -92,15 +103,18 @@ lemma "c_sapply_comp": "c_sapply \<tau> (c_sapply \<sigma> c) = c_sapply (\<tau>
   using m_sapply_comp
   by (cases c) simp
 
+(* free variables of a constraint system *)
 definition cs_fv :: "constraint_system \<Rightarrow> string set" where
   "cs_fv cs = \<Union>(c_fv ` set cs)"
 
 lemma "cs_fv_finite": "finite (cs_fv cs)"
   by (simp add: c_fv_finite cs_fv_def)
 
+(* cs_sapply applies a message substitution to a constraint system *)
 definition cs_sapply :: "m_subst \<Rightarrow> constraint_system \<Rightarrow> constraint_system" where
   "cs_sapply \<sigma> cs = map (c_sapply \<sigma>) cs"
 
+(* applying identity substitution is just the identity on the constraint systems *)
 lemma "cs_sapply_id": "cs_sapply Var = id"
   apply (rule ext)
   subgoal for cs
@@ -108,6 +122,7 @@ lemma "cs_sapply_id": "cs_sapply Var = id"
     by (simp add: c_sapply_id)
   done
 
+(* lifted Lemma 1 *)
 lemma "cs_fv_sapply_sdom_svran":
   assumes "x \<in> cs_fv (cs_sapply \<sigma> cs)"
   shows "x \<in> (cs_fv cs - m_sdom \<sigma>) \<union> m_svran \<sigma>"
@@ -123,37 +138,45 @@ proof -
     using $ cs_fv_def by auto
 qed
 
+(* cs_derives checks if all constraints are satisfied w.r.t. intruder deduction rules *)
 definition cs_derives :: "constraint_system \<Rightarrow> bool" where
   "cs_derives cs = list_all c_derives cs"
 
 (* 7. (b) *)
 
+(* Definition 2 *)
 type_synonym sol_set = "m_subst set"
 definition sol :: "constraint_system \<Rightarrow> sol_set" where
   "sol cs = {\<sigma> | \<sigma>. cs_derives (cs_sapply \<sigma> cs)}"
 
+(* Lemma 5 *)
 lemma "sol_cs_union": "sol (cs @ cs') = (sol cs) \<inter> (sol cs')"
   unfolding sol_def cs_sapply_def cs_derives_def
   by (rule set_eqI) auto
 
+(* helper lemma for Lemma 6 *)
 lemma "sol_c_sapply": "\<tau> \<in> sol [c_sapply \<sigma> c] \<Longrightarrow> \<tau> \<circ>m \<sigma> \<in> sol [c]"
   unfolding sol_def cs_sapply_def cs_derives_def
   by (simp add: c_sapply_comp)
 
+(* Lemma 6 *)
 lemma "sol_cs_sapply": "\<tau> \<in> sol (cs_sapply \<sigma> cs) \<Longrightarrow> \<tau> \<circ>m \<sigma> \<in> sol cs"
   unfolding sol_def cs_sapply_def cs_derives_def
   by (simp add: c_sapply_comp list_all_length)
 
+(* introduction rule for sol *)
 lemma "sol_sapply": "(m_sapply \<tau> ` (set M \<union> set A) \<turnstile> m_sapply \<tau> t) = (\<tau> \<in> sol [M | A \<triangleright> t])"
   unfolding sol_def cs_derives_def cs_sapply_def
   apply (rule iffI)
    apply auto
    by (simp add: image_Un)+
 
+(* dropping a constraint preserves a solution *)
 lemma "sol_fst": "\<tau> \<in> sol [c1, c2] \<Longrightarrow> \<tau> \<in> sol [c1]"
   using sol_cs_union
   by fastforce
 
+(* dropping a constraint preserves a solution *)
 lemma "sol_snd": "\<tau> \<in> sol [c1, c2] \<Longrightarrow> \<tau> \<in> sol [c2]"
   using sol_cs_union
   by (metis (full_types) IntE append_Cons append_Nil)
@@ -188,15 +211,18 @@ fun c_simple :: "constraint \<Rightarrow> bool" where
 definition cs_simple :: "constraint_system \<Rightarrow> bool" where
   "cs_simple cs = (\<forall>c \<in> set cs. c_simple c)"
 
+(* Definition 3 *)
 definition red :: "constraint_system \<Rightarrow> m_subst set" where
   "red cs = {m_scomp \<tau> \<sigma> | \<tau> \<sigma>. \<exists>cs'. rer_star cs \<sigma> cs' \<and> cs_simple cs' \<and> \<tau> \<in> sol cs'}"
 
 (* 8. (a) *)
 
+(* the intruder does not change under any message substitution *)
 lemma "m_subst_intruder": "m_sapply \<tau> intruder = intruder"
   unfolding intruder_def
   by simp
 
+(* Lemma 7 *)
 lemma "rer1_sound": "rer1 c \<sigma> cs \<Longrightarrow> \<tau> \<in> sol cs \<Longrightarrow> \<tau> \<circ>m \<sigma> \<in> sol [c]"
 proof (induction rule: rer1.induct)
   case (Unif t M A \<sigma>)
@@ -281,17 +307,20 @@ next
     by blast
 qed
 
+(* Lemma 8 *)
 lemma "rer_sound": "rer cs \<sigma> cs' \<Longrightarrow> \<tau> \<in> sol cs' \<Longrightarrow> \<tau> \<circ>m \<sigma> \<in> sol cs"
   apply (induction rule: rer.induct)
   using sol_cs_union sol_cs_sapply rer1_sound
   by (metis (full_types) IntE IntI append_Cons append_Nil)
 
+(* Lemma 9 *)
 lemma "rer_star_sound": "rer_star cs \<sigma> cs' \<Longrightarrow> cs_simple cs' \<Longrightarrow> \<tau> \<in> sol cs' \<Longrightarrow> \<tau> \<circ>m \<sigma> \<in> sol cs"
   using rer_sound m_sapply_comp
   apply -
   by (induction rule: rer_star.induct) auto
 
-theorem "cs_sound": "red cs \<subseteq> sol cs"
+(* Theorem 4 *)
+theorem "red_sound": "red cs \<subseteq> sol cs"
   unfolding red_def
   using rer_star_sound
   by auto
@@ -320,6 +349,7 @@ fun \<chi> :: "msg \<Rightarrow> nat" where
 lemma "\<chi>_pos": "\<chi> m \<ge> 1"
   by (induction m) auto
 
+(* \<chi> from Section 3.2.4. on lists *)
 definition \<chi>' :: "msg list \<Rightarrow> nat" where
   "\<chi>' M = prod_list (map \<chi> M)"
 
@@ -329,6 +359,7 @@ lemma "\<chi>'_pos": "\<chi>' M \<ge> 1"
    apply simp_all
   using One_nat_def \<chi>_pos by presburger
 
+(* \<chi>' is monotone w.r.t. dropping all but one occurrence of a message from a list *)
 lemma "\<chi>'_incl": "m \<in> set M \<Longrightarrow> M' = removeAll m M \<Longrightarrow> \<chi>' (m # M') \<le> \<chi>' M"
   unfolding \<chi>'_def
   apply (induction M arbitrary: M')
@@ -351,7 +382,8 @@ lemma "\<chi>'_incl": "m \<in> set M \<Longrightarrow> M' = removeAll m M \<Long
   qed
   done
 
-lemma "\<chi>'_pref": "\<chi>' P < \<chi>' P' \<Longrightarrow> \<chi>' (P @ M) < \<chi>' (P' @ M)"
+(* \<chi>' monotone w.r.t. appending the same list of messages *)
+lemma "\<chi>'_app": "\<chi>' P < \<chi>' P' \<Longrightarrow> \<chi>' (P @ M) < \<chi>' (P' @ M)"
   unfolding "\<chi>'_def"
   apply (induction M)
    apply simp_all
@@ -370,6 +402,7 @@ definition \<eta>1 :: "constraint_system \<Rightarrow> nat" where
 definition \<eta>2 :: "constraint_system \<Rightarrow> nat" where
   "\<eta>2 cs = sum_list (map w cs)"
 
+(* substituting the intruder for some variable does not introduce any new free variables *)
 lemma "m_fv_intruder_sub": "\<sigma> = Var(x := intruder) \<Longrightarrow> m_fv (m_sapply \<sigma> m) \<subseteq> m_fv m"
   unfolding intruder_def
   by (induction m) auto
@@ -378,6 +411,7 @@ lemma "c_fv_intruder_sub": "\<sigma> = Var(x := intruder) \<Longrightarrow> c_fv
   apply (cases c)
   using m_fv_intruder_sub by fastforce+
 
+(* a step under rer1 does not introduce any new free variables *)
 lemma "rer1_fv_sub_cs_aux": "rer1 c \<sigma> cs \<Longrightarrow> cs_fv cs \<subseteq> cs_fv (c # cs'')"
   unfolding cs_fv_def cs_sapply_def
   using c_fv_intruder_sub
@@ -393,7 +427,8 @@ lemma "rer1_fv_sub_cs": "rer1 c \<sigma> cs \<Longrightarrow> cs_fv cs \<subsete
   using rer1_fv_sub_cs_aux
   using cs_fv_def by fastforce
 
-lemma "rer1_fv_sub_cs'": "rer1 c \<sigma> cs \<Longrightarrow> cs_fv (cs_sapply \<sigma> cs' @ cs_sapply \<sigma> cs'') \<subseteq> cs_fv (cs' @ (c # cs''))"
+(* Lemma 10 *)
+lemma "rer1_fv_sub": "rer1 c \<sigma> cs \<Longrightarrow> cs_fv (cs_sapply \<sigma> cs' @ cs @ cs_sapply \<sigma> cs'') \<subseteq> cs_fv (cs' @ (c # cs''))"
   unfolding cs_fv_def cs_sapply_def
   using cs_sapply_id c_sapply_id
   apply -
@@ -418,14 +453,11 @@ next
   show ?case
     apply (rule subsetI)
     apply simp
-    using Ksub.hyps(2) c_fv_intruder_sub by blast
+    using Ksub.hyps(2) c_fv_intruder_sub
+    by (metis contra_subsetD m_fv_intruder_sub)
 qed auto
 
-lemma "rer1_fv_sub": "rer1 c \<sigma> cs \<Longrightarrow> cs_fv (cs_sapply \<sigma> cs' @ cs @ cs_sapply \<sigma> cs'') \<subseteq> cs_fv (cs' @ (c # cs''))"
-  using rer1_fv_sub_cs rer1_fv_sub_cs'
-  unfolding cs_fv_def
-  by auto
-
+(* Lemma 11 *)
 lemma "rer1_fv_neq": "rer1 c \<sigma> cs \<Longrightarrow> \<sigma> \<noteq> Var \<Longrightarrow> cs_fv (cs_sapply \<sigma> cs' @ cs @ cs_sapply \<sigma> cs'') \<noteq> cs_fv (cs' @ (c # cs''))"
 proof (induction rule: rer1.induct)
   case (Unif t M A \<sigma>)
@@ -472,6 +504,7 @@ next
     by auto
 qed auto
 
+(* Lemma 12 *)
 lemma "rer1_measure_lt": "rer1 c \<sigma> cs \<Longrightarrow> \<sigma> = Var \<Longrightarrow> \<eta>2 cs < w c"
   unfolding \<eta>2_def
 proof (induction rule: rer1.induct)
@@ -513,7 +546,7 @@ next
   have "\<chi>'_pair": "\<chi>' [u, v] < \<chi>' [Pair u v]" unfolding \<chi>'_def by auto
   have "sum_list (map w [(u # v # M') | (msg.Pair u v # A) \<triangleright> t]) = w ((u # v # M') | (msg.Pair u v # A) \<triangleright> t)" by simp
   also have "... = \<chi>' (u # v # M') * \<Theta> t" by simp
-  also have "... < \<chi>' (Pair u v # M') * \<Theta> t" using "\<chi>'_pair" "\<chi>'_pref"[of "[u, v]" "[Pair u v]" "M'"] unfolding "\<chi>'_def" by (metis Cons_eq_appendI One_nat_def \<Theta>_pos less_le_trans mult_less_mono1 self_append_conv2 zero_less_Suc)
+  also have "... < \<chi>' (Pair u v # M') * \<Theta> t" using "\<chi>'_pair" "\<chi>'_app"[of "[u, v]" "[Pair u v]" "M'"] unfolding "\<chi>'_def" by (metis Cons_eq_appendI One_nat_def \<Theta>_pos less_le_trans mult_less_mono1 self_append_conv2 zero_less_Suc)
   also have "... \<le> \<chi>' M * \<Theta> t" by (simp add: Proj.hyps \<chi>'_incl)
   finally show ?case by auto
 next
@@ -538,6 +571,7 @@ next
   then show ?case unfolding intruder_def by (metis fun_upd_same msg.distinct(1))
 qed
 
+(* termination relation from Section 3.2.4. *)
 definition "term_rel" :: "(constraint_system \<times> constraint_system) set" where
   "term_rel = \<eta>1 <*mlex*> measure \<eta>2"
 
@@ -545,6 +579,7 @@ lemma "term_rel_wf": "wf term_rel"
   unfolding term_rel_def
   by (simp add: wf_mlex)
 
+(* abstracting away the substitution from rer *)
 inductive "rer_any" :: "constraint_system \<Rightarrow> constraint_system \<Rightarrow> bool" where
   "rer cs \<sigma> cs' \<Longrightarrow> rer_any cs' cs"
 
@@ -567,10 +602,12 @@ proof (induction rule: rer.induct)
     by (simp add: Context.prems cs_sapply_id)
 qed
 
+(* rer_any is a subset of the termination relation *)
 lemma "rer_any_term": "rer_any cs' cs \<Longrightarrow> (cs', cs) \<in> term_rel"
   unfolding term_rel_def
   by (metis in_measure mlex_leq mlex_less rer1_\<eta>1 rer1_\<eta>1' rer1_\<eta>2 rer_any.cases)
 
+(* Theorem 5 *)
 theorem "rer_any_wf": "wfP rer_any"
   by (metis rer_any_term term_rel_wf wfE_min wfP_eq_minimal)
 

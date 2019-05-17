@@ -4,10 +4,12 @@ begin
 
 (* 9. (a) *)
 
+(* map a list until an element is mapped to Some _ and return it *)
 fun "fold_option" :: "('a \<Rightarrow> 'b option) \<Rightarrow> 'a list \<Rightarrow> 'b option" where
   "fold_option f [] = None"
 | "fold_option f (a # as) = (case f a of Some b \<Rightarrow> Some b | None \<Rightarrow> fold_option f as)"
 
+(* needed for termination proof of functions with recursive calls under fold_option *)
 lemma "fold_option_cong"[fundef_cong]: "xs = ys \<Longrightarrow> (\<And>a. a \<in> set xs \<Longrightarrow> f a = f' a) \<Longrightarrow> fold_option f xs = fold_option f' ys"
 proof (induction xs arbitrary: ys)
   case (Cons a as)
@@ -49,10 +51,12 @@ lemma "exists_maps":
    apply simp
   by (metis Un_iff maps_simps(1) set_ConsD set_append)
 
+(* successors of a constraint using Unif rule of rer1 *)
 fun c_unify :: "constraint \<Rightarrow> (constraint_system \<times> m_subst) list" where
   "c_unify (M | A \<triangleright> (Var _)) = []"
 | "c_unify (M | A \<triangleright> t) = List.maps (\<lambda>u. case m_unify [(t, u)] of Some \<sigma> \<Rightarrow> [([], \<sigma>)] | None \<Rightarrow> []) (M @ A)"
 
+(* soundness of c_unify *)
 lemma "c_unify_rer1":
   assumes "(cs, \<sigma>) \<in> set (c_unify (M | A \<triangleright> t))"
   shows "rer1 (M | A \<triangleright> t) \<sigma> cs"
@@ -69,6 +73,7 @@ lemma "c_unify_rer1":
       by fastforce
   qed
 
+(* successors of a constraint using Comp rules of rer1 *)
 fun c_comp :: "constraint \<Rightarrow> (constraint_system \<times> m_subst) list" where
   "c_comp (M | A \<triangleright> Hash t) = [([M | A \<triangleright> t], Var)]"
 | "c_comp (M | A \<triangleright> Pair t1 t2) = [([M | A \<triangleright> t1, M | A \<triangleright> t2], Var)]"
@@ -77,6 +82,7 @@ fun c_comp :: "constraint \<Rightarrow> (constraint_system \<times> m_subst) lis
 | "c_comp (M | A \<triangleright> Signature t (Cons i)) = (if i = \<iota> then [([M | A \<triangleright> t], Var)] else [])"
 | "c_comp (M | A \<triangleright> _) = []"
 
+(* soundness of c_comp *)
 lemma "c_comp_rer1":
   assumes "(cs, \<sigma>) \<in> set (c_comp (M | A \<triangleright> t))"
   shows "rer1 (M | A \<triangleright> t) \<sigma> cs"
@@ -93,6 +99,7 @@ proof (cases t)
     qed auto
   qed force+
 
+(* helper function for Analysis rules of rer1 providing successors of analyzing one message from M *)
 fun "c_dec_term" :: "constraint \<Rightarrow> msg \<Rightarrow> (constraint_system \<times> m_subst) list" where
   "c_dec_term (M | A \<triangleright> t) (Pair u v) = (let M' = removeAll (Pair u v) M in [([(u # v # M') | (Pair u v # A) \<triangleright> t], Var)])"
 | "c_dec_term (M | A \<triangleright> t) (Sym_encrypt u k) = (let M' = removeAll (Sym_encrypt u k) M in [([(u # M') | (Sym_encrypt u k # A) \<triangleright> t, M' | (Sym_encrypt u k # A) \<triangleright> k], Var)])"
@@ -100,6 +107,7 @@ fun "c_dec_term" :: "constraint \<Rightarrow> msg \<Rightarrow> (constraint_syst
 | "c_dec_term (M | A \<triangleright> t) (Public_key_encrypt u (Var x)) = (let \<sigma> = Var(x := intruder) in [([c_sapply \<sigma> (M | A \<triangleright> t)], \<sigma>)])"
 | "c_dec_term (M | A \<triangleright> t) _ = []"
 
+(* soundness of c_dec_term *)
 lemma "c_dec_term_rer1":
   assumes "(cs, \<sigma>) \<in> set (c_dec_term (M | A \<triangleright> t) m)" and "m \<in> set M"
   shows "rer1 (M | A \<triangleright> t) \<sigma> cs"
@@ -127,9 +135,11 @@ next
     qed auto
 qed auto
 
+(* successors of a constraint using Analysis rules of rer1 *)
 fun "c_dec" :: "constraint \<Rightarrow> (constraint_system \<times> m_subst) list" where
   "c_dec (M | A \<triangleright> t) = List.maps (c_dec_term (M | A \<triangleright> t)) M"
 
+(* soundness of c_dec *)
 lemma "c_dec_rer1":
   assumes "(cs, \<sigma>) \<in> set (c_dec (M | A \<triangleright> t))"
   shows "rer1 (M | A \<triangleright> t) \<sigma> cs"
@@ -142,9 +152,11 @@ proof -
     by simp
 qed
 
+(* successors of a constraint under rer1 *)
 definition "c_succ" :: "constraint \<Rightarrow> (constraint_system \<times> m_subst) list" where
   "c_succ c = c_unify c @ c_comp c @ c_dec c"
 
+(* soundness of c_succ *)
 lemma "c_succ_rer1":
   assumes "(cs, \<sigma>) \<in> set (c_succ c)"
   shows "rer1 c \<sigma> cs"
@@ -155,6 +167,7 @@ proof -
     using assms c_unify_rer1 c_comp_rer1 c_dec_rer1 c_succ_def by auto
 qed
 
+(* completeness of c_succ w.r.t. rer1 *)
 lemma "c_rer1_succ": "rer1 c \<sigma> cs \<Longrightarrow> (cs, \<sigma>) \<in> set (c_succ c)"
 proof (induction rule: rer1.induct)
   case (Unif t M A \<sigma>)
@@ -209,11 +222,31 @@ next
     by (simp add: c_succ_def)
 qed (simp add: c_succ_def intruder_def)+
 
+(* successors of a constraint system under rer, i.e., using rule Context *)
 fun "cs_succ_aux" :: "constraint_system \<Rightarrow> constraint_system \<Rightarrow> (constraint_system \<times> m_subst) list" where
   "cs_succ_aux _ [] = []"
 | "cs_succ_aux cs' (c # cs'') = map (\<lambda>(cs, \<sigma>). (cs_sapply \<sigma> cs' @ cs @ cs_sapply \<sigma> cs'', \<sigma>)) (c_succ c)
                               @ cs_succ_aux (cs' @ [c]) cs''"
 
+(* helper lemma for soundness of cs_succ_aux_rer *)
+lemma "cs_succ_aux_rer":
+  assumes "(ocs, \<sigma>) \<in> set (cs_succ_aux pcs ics)"
+  shows "rer (pcs @ ics) \<sigma> ocs"
+  using assms
+proof (induction ics arbitrary: pcs)
+  case (Cons c ics)
+  then show ?case
+    proof (cases "(ocs, \<sigma>) \<in> set (cs_succ_aux (pcs @ [c]) ics)")
+      case False
+      then obtain cs where "(cs, \<sigma>) \<in> set (c_succ c)" and "ocs_def": "ocs = cs_sapply \<sigma> pcs @ cs @ cs_sapply \<sigma> ics"
+        using Cons False
+        by auto
+      then show ?thesis
+        by (simp add: Context c_succ_rer1)
+    qed fastforce
+qed simp
+
+(* helper lemma for completeness of cs_succ_aux w.r.t. rer1 *)
 lemma "cs_rer_succ_aux":
   assumes "rer1 c \<sigma> cs"
   shows "(cs_sapply \<sigma> (pcs @ cs') @ cs @ cs_sapply \<sigma> cs'', \<sigma>) \<in> set (cs_succ_aux pcs (cs' @ [c] @ cs''))"
@@ -232,30 +265,16 @@ next
     by simp
 qed
 
-lemma "cs_succ_aux_rer":
-  assumes "(ocs, \<sigma>) \<in> set (cs_succ_aux pcs ics)"
-  shows "rer (pcs @ ics) \<sigma> ocs"
-  using assms
-proof (induction ics arbitrary: pcs)
-  case (Cons c ics)
-  then show ?case
-    proof (cases "(ocs, \<sigma>) \<in> set (cs_succ_aux (pcs @ [c]) ics)")
-      case False
-      then obtain cs where "(cs, \<sigma>) \<in> set (c_succ c)" and "ocs_def": "ocs = cs_sapply \<sigma> pcs @ cs @ cs_sapply \<sigma> ics"
-        using Cons False
-        by auto
-      then show ?thesis
-        by (simp add: Context c_succ_rer1)
-    qed fastforce
-qed simp
-
+(* successors of a constraint system under rer *)
 definition "cs_succ" :: "constraint_system \<Rightarrow> (constraint_system \<times> m_subst) list" where
   "cs_succ cs = cs_succ_aux [] cs"
 
+(* soundness of cs_succ *)
 lemma "cs_succ_rer": "(cs, \<sigma>) \<in> set (cs_succ ics) \<Longrightarrow> rer ics \<sigma> cs"
   unfolding cs_succ_def
   using cs_succ_aux_rer by fastforce
 
+(* completeness of cs_succ w.r.t. rer *)
 lemma "cs_rer_succ": "rer ics \<sigma> cs \<Longrightarrow> (cs, \<sigma>) \<in> set (cs_succ ics)"
   unfolding cs_succ_def
   apply (induction rule: rer.induct)
@@ -266,10 +285,12 @@ lemma "cs_rer_succ": "rer ics \<sigma> cs \<Longrightarrow> (cs, \<sigma>) \<in>
 
 (* 9. (b) *)
 
+(* needed for termination proof of search *)
 lemma "cs_succ_rer_any": "(cs, \<sigma>) \<in> set (cs_succ ics) \<Longrightarrow> rer_any cs ics"
   using cs_succ_rer rer_any.intros
   by blast
 
+(* main search function *)
 function search :: "constraint_system \<Rightarrow> (constraint_system \<times> m_subst) option" where
   "search ics = (if cs_simple ics then Some (ics, Var)
                  else fold_option (\<lambda>(cs, \<sigma>). case search cs of Some (cs', \<sigma>') \<Rightarrow> Some (cs', m_scomp \<sigma>' \<sigma>) | None \<Rightarrow> None) (cs_succ ics))"
@@ -281,6 +302,7 @@ termination
 
 (* 9. (c) *)
 
+(* Key transport protocol *)
 definition KTP :: "constraint_system" where
   "KTP = [[Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Pair (Var ''A0'') (Var ''B0''),
                [Public_key_encrypt (Pair (Cons ''k0'') (Signature (Cons ''k0'') (Var ''A0''))) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Public_key_encrypt (Pair (Var ''K1'') (Signature (Var ''K1'') (Cons ''a''))) (Cons ''b''),
@@ -288,6 +310,7 @@ definition KTP :: "constraint_system" where
                [Sym_encrypt (Cons ''m1'') (Var ''K1''), Public_key_encrypt (Pair (Cons ''k0'') (Signature (Cons ''k0'') (Var ''A0''))) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Pair (Var ''K1'') (Cons ''m1'')]"
 value "map_option (\<lambda>(cs, \<sigma>). (cs, map (\<lambda>v. (v, \<sigma> v)) [''A0'', ''B0'', ''K1'', ''Z0''])) (search KTP)"
 
+(* Needham-Schroeder Public-Key protocol *)
 definition NSPK :: "constraint_system" where
   "NSPK = [[Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Pair (Var ''A0'') (Var ''B0''),
                [Public_key_encrypt (Pair (Cons ''na0'') (Var ''A0'')) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Public_key_encrypt (Pair (Var ''NA1'') (Cons ''a'')) (Cons ''b''),
@@ -298,6 +321,7 @@ value "map_option (\<lambda>(cs, \<sigma>). (cs, map (\<lambda>v. (v, \<sigma> v
 
 (* 10. (a) *)
 
+(* soundness of search *)
 lemma "search_sound":
   assumes "search ics = Some (cs', \<sigma>'')"
   shows "rer_star ics \<sigma>'' cs' \<and> cs_simple cs'"
@@ -327,10 +351,11 @@ lemma "search_sound":
         using m_scomp_sigma sub Trans
         by blast
     qed (simp add: Refl)
-    done
+  done
 
 (* 10. (b) *)
 
+(* completeness of search w.r.t. rer_star *)
 lemma "search_complete":
   assumes "rer_star ics \<sigma>'' cs'" and "cs_simple cs'"
   shows "\<exists>x. search ics = Some x"
@@ -356,6 +381,6 @@ lemma "search_complete":
       then show ?thesis
         by blast
     qed simp
-    done
+  done
 
 end
