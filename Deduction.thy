@@ -140,7 +140,7 @@ qed
 
 (* cs_derives checks if all constraints are satisfied w.r.t. intruder deduction rules *)
 definition cs_derives :: "constraint_system \<Rightarrow> bool" where
-  "cs_derives cs = list_all c_derives cs"
+  "cs_derives cs = (\<forall>c \<in> set cs. c_derives c)"
 
 (* 7. (b) *)
 
@@ -162,7 +162,7 @@ lemma "sol_c_sapply": "\<tau> \<in> sol [c_sapply \<sigma> c] \<Longrightarrow> 
 (* Lemma 6 *)
 lemma "sol_cs_sapply": "\<tau> \<in> sol (cs_sapply \<sigma> cs) \<Longrightarrow> \<tau> \<circ>m \<sigma> \<in> sol cs"
   unfolding sol_def cs_sapply_def cs_derives_def
-  by (simp add: c_sapply_comp list_all_length)
+  by (simp add: c_sapply_comp)
 
 (* introduction rule for sol *)
 lemma "sol_sapply": "(m_sapply \<tau> ` (set M \<union> set A) \<turnstile> m_sapply \<tau> t) = (\<tau> \<in> sol [M | A \<triangleright> t])"
