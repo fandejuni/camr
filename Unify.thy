@@ -1145,7 +1145,7 @@ lemma fv_subst_term:
   "fv (Var(x := t) \<cdot> tt) \<subseteq> fv t \<union> fv tt"
 proof -
   have "\<And>xa xaa. \<lbrakk>xaa \<in> fv tt; xa \<in> fv (if xaa = x then t else Var xaa); xa \<notin> fv tt\<rbrakk> \<Longrightarrow> xa \<in> fv t"
-    by (metis fv.simps(1) singletonD)
+    by (metis (full_types) fv.simps(1) singletonD)
   then show ?thesis by auto
 qed
 
@@ -1153,9 +1153,9 @@ lemma fv_subst_eq:
   "fv_eq (Var(x := t) \<cdot> eq) \<subseteq> fv t \<union> fv_eq eq"
 proof -
   have "\<And>xa xaa. \<lbrakk>xaa \<in> fv (fst eq); xa \<in> fv (if xaa = x then t else Var xaa); xa \<notin> fv t; xa \<notin> fv (snd eq)\<rbrakk> \<Longrightarrow> xa \<in> fv (fst eq)"
-    by (metis fv.simps(1) singletonD)
+    by (metis (full_types) fv.simps(1) singletonD)
   moreover have "\<And>xa xaa. \<lbrakk>xaa \<in> fv (snd eq); xa \<in> fv (if xaa = x then t else Var xaa); xa \<notin> fv t; xa \<notin> fv (snd eq)\<rbrakk> \<Longrightarrow> xa \<in> fv (fst eq)"
-    by (metis fv.simps(1) singletonD)
+    by (metis (full_types) fv.simps(1) singletonD)
   then show ?thesis using calculation by (auto simp add: fv_eq.elims fv_subst_term le_supI1 le_supI2 sup_assoc sup_left_commute)
 qed
 
@@ -1173,9 +1173,9 @@ next
     have "\<And>xa. \<lbrakk>xa \<in> fold (\<union>) (map (fv_eq \<circ> (\<cdot>) (Var(x := t))) U) {}; xa \<notin> fold (\<union>) (map fv_eq U) {}; xa \<notin> fv t; xa \<notin> fv (snd a)\<rbrakk> \<Longrightarrow> xa \<in> fv (fst a)"
       by (metis Cons.IH UnE fv_eq_system.simps map_map sapply_eq_system.elims subsetCE)
     moreover have "\<And>xa xaa. \<lbrakk>xaa \<in> fv (fst a); xa \<in> fv (if xaa = x then t else Var xaa); xa \<notin> fold (\<union>) (map fv_eq U) {}; xa \<notin> fv t; xa \<notin> fv (snd a)\<rbrakk> \<Longrightarrow> xa \<in> fv (fst a)"
-      by (metis fv.simps(1) singletonD)
+      by (metis (full_types) fv.simps(1) singletonD)
     moreover have "\<And>xa xaa. \<lbrakk>xaa \<in> fv (snd a); xa \<in> fv (if xaa = x then t else Var xaa); xa \<notin> fold (\<union>) (map fv_eq U) {}; xa \<notin> fv t; xa \<notin> fv (snd a)\<rbrakk> \<Longrightarrow> xa \<in> fv (fst a)"
-      by (metis fv.simps(1) singletonD)
+      by (metis (full_types) fv.simps(1) singletonD)
     then show ?thesis using calculation by (auto simp add: Cons.IH Un_upper1 fv_subst_eq inf_sup_aci(5) subset_trans)
   qed
   then show ?case
