@@ -868,23 +868,9 @@ theorem soundness:
 
 (* (c). Formalize theorem 3 *)
 
-fun sum_liste :: "nat list \<Rightarrow> nat" where
-  "sum_liste [] = 0"
-| "sum_liste (t # q) = t + sum_liste q"
-
-lemma sum_liste_fold:
-  "fold (+) (map f l) 0 = sum_liste (map f l)"
-proof (induction l)
-  case Nil
-  then show ?case by simp
-next
-  case (Cons a l)
-  then show ?case by (simp add: fold_plus_sum_list_rev)
-qed
-
 lemma increasing_sum_liste:
- "xa \<in> (set x2) \<Longrightarrow> sum_liste (map size_term (map (sapply \<tau>) x2))  \<ge>
-sum_liste (map size_term (map (sapply \<tau>) [xa]))"
+ "xa \<in> (set x2) \<Longrightarrow> sum_list (map size_term (map (sapply \<tau>) x2))  \<ge>
+sum_list (map size_term (map (sapply \<tau>) [xa]))"
 proof (induction x2)
   case Nil
   then show ?case by auto
@@ -902,13 +888,13 @@ proof -
   also have "size_term (Fun x1a (map (sapply \<tau>) x2)) \<ge>
             fold (+) (map size_term (map (sapply \<tau>) x2)) 0"
     by (meson less_imp_le_nat size_term_sound)
-  also have "fold (+) (map size_term (map (sapply \<tau>) x2)) 0 = sum_liste (map size_term (map (sapply \<tau>) x2))"
-    by (simp add: sum_liste_fold)
-  also have "... \<ge> sum_liste (map size_term (map (sapply \<tau>) [xa]))"
+  also have "fold (+) (map size_term (map (sapply \<tau>) x2)) (0 :: nat) = sum_list (map size_term (map (sapply \<tau>) x2))"
+    by (simp add: fold_plus_sum_list_rev)
+  also have "... \<ge> sum_list (map size_term (map (sapply \<tau>) [xa]))"
     using assms increasing_sum_liste by auto
-  have "sum_liste (map size_term (map (sapply \<tau>) [xa])) = size_term (sapply \<tau> xa)" by simp
+  have "sum_list (map size_term (map (sapply \<tau>) [xa])) = size_term (sapply \<tau> xa)" by simp
   then show ?thesis
-    using \<open>sum_liste (map Unify.size_term (map ((\<cdot>) \<tau>) [xa])) \<le> sum_liste (map Unify.size_term (map ((\<cdot>) \<tau>) x2))\<close> calculation by linarith
+    using \<open>sum_list (map Unify.size_term (map ((\<cdot>) \<tau>) [xa])) \<le> sum_list (map Unify.size_term (map ((\<cdot>) \<tau>) x2))\<close> calculation by linarith
 qed
 
 lemma size_term_subterm_prelim:
