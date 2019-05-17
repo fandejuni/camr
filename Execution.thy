@@ -9,16 +9,6 @@ fun "fold_option" :: "('a \<Rightarrow> 'b option) \<Rightarrow> 'a list \<Right
   "fold_option f [] = None"
 | "fold_option f (a # as) = (case f a of Some b \<Rightarrow> Some b | None \<Rightarrow> fold_option f as)"
 
-(* needed for termination proof of functions with recursive calls under fold_option *)
-lemma "fold_option_cong"[fundef_cong]: "xs = ys \<Longrightarrow> (\<And>a. a \<in> set xs \<Longrightarrow> f a = f' a) \<Longrightarrow> fold_option f xs = fold_option f' ys"
-proof (induction xs arbitrary: ys)
-  case (Cons a as)
-  then obtain a' as' where "ys = a' # as'"
-    by blast
-  then show ?case
-    by (metis Cons.IH Cons.prems(1) Cons.prems(2) fold_option.simps(2) list.set_intros(1) list.set_intros(2))
-qed simp
-
 lemma "fold_option_exists":
   assumes "fold_option f as = Some b"
   shows "\<exists>a \<in> set as. f a = Some b"
@@ -290,6 +280,16 @@ lemma "cs_succ_rer_any": "(cs, \<sigma>) \<in> set (cs_succ ics) \<Longrightarro
   using cs_succ_rer rer_any.intros
   by blast
 
+lemma "fold_option_cong": "xs = ys \<Longrightarrow> (\<And>a. a \<in> set xs \<Longrightarrow> f a = f' a) \<Longrightarrow> fold_option f xs = fold_option f' ys"
+proof (induction xs arbitrary: ys)
+  case (Cons a as)
+  then obtain a' as' where "ys = a' # as'"
+    by blast
+  then show ?case
+    by (metis Cons.IH Cons.prems(1) Cons.prems(2) fold_option.simps(2) list.set_intros(1) list.set_intros(2))
+qed simp
+
+context notes fold_option_cong[fundef_cong] begin
 (* main search function *)
 function search :: "constraint_system \<Rightarrow> (constraint_system \<times> m_subst) option" where
   "search ics = (if cs_simple ics then Some (ics, Var)
@@ -299,6 +299,19 @@ termination
   apply (relation "{(x, y). rer_any x y}")
   using rer_any_wf wfP_def apply blast
   using cs_succ_rer_any by auto
+end
+
+definition post where "post = fold_option id"
+
+lemma "fold_option_map": "fold_option f xs = post (map f xs)"
+  unfolding post_def
+  apply (induction xs)
+   apply simp
+  by (metis fold_option.simps(2) id_apply list.simps(9))
+
+(* slow search function *)
+definition "search_slow = search"
+declare search.simps[unfolded fold_option_map, folded search_slow_def, code]
 
 (* 9. (c) *)
 
@@ -308,7 +321,10 @@ definition KTP :: "constraint_system" where
                [Public_key_encrypt (Pair (Cons ''k0'') (Signature (Cons ''k0'') (Var ''A0''))) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Public_key_encrypt (Pair (Var ''K1'') (Signature (Var ''K1'') (Cons ''a''))) (Cons ''b''),
                [Sym_encrypt (Cons ''m1'') (Var ''K1''), Public_key_encrypt (Pair (Cons ''k0'') (Signature (Cons ''k0'') (Var ''A0''))) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Sym_encrypt (Var ''Z0'') (Cons ''k0''),
                [Sym_encrypt (Cons ''m1'') (Var ''K1''), Public_key_encrypt (Pair (Cons ''k0'') (Signature (Cons ''k0'') (Var ''A0''))) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Pair (Var ''K1'') (Cons ''m1'')]"
-value "map_option (\<lambda>(cs, \<sigma>). (cs, map (\<lambda>v. (v, \<sigma> v)) [''A0'', ''B0'', ''K1'', ''Z0''])) (search KTP)"
+definition "search_KTP = map_option (\<lambda>(cs, \<sigma>). (cs, map (\<lambda>v. (v, \<sigma> v)) [''A0'', ''B0'', ''K1'', ''Z0''])) (search KTP)"
+definition "search_slow_KTP = map_option (\<lambda>(cs, \<sigma>). (cs, map (\<lambda>v. (v, \<sigma> v)) [''A0'', ''B0'', ''K1'', ''Z0''])) (search_slow KTP)"
+value "search_KTP"
+(* value "search_slow_KTP" *)
 
 (* Needham-Schroeder Public-Key protocol *)
 definition NSPK :: "constraint_system" where
@@ -317,7 +333,20 @@ definition NSPK :: "constraint_system" where
                [Public_key_encrypt (Pair (Var ''NA1'') (Cons ''nb1'')) (Cons ''a''), Public_key_encrypt (Pair (Cons ''na0'') (Var ''A0'')) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Public_key_encrypt (Pair (Cons ''na0'') (Var ''NB0'')) (Var ''A0''),
                [Public_key_encrypt (Var ''NB0'') (Var ''B0''), Public_key_encrypt (Pair (Var ''NA1'') (Cons ''nb1'')) (Cons ''a''), Public_key_encrypt (Pair (Cons ''na0'') (Var ''A0'')) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Public_key_encrypt (Cons ''nb1'') (Cons ''b''),
                [Public_key_encrypt (Var ''NB0'') (Var ''B0''), Public_key_encrypt (Pair (Var ''NA1'') (Cons ''nb1'')) (Cons ''a''), Public_key_encrypt (Pair (Cons ''na0'') (Var ''A0'')) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Pair (Var ''NA1'') (Cons ''nb1'')]"
-value "map_option (\<lambda>(cs, \<sigma>). (cs, map (\<lambda>v. (v, \<sigma> v)) [''A0'', ''B0'', ''NA1'', ''NB0''])) (search NSPK)"
+definition "search_NSPK = map_option (\<lambda>(cs, \<sigma>). (cs, map (\<lambda>v. (v, \<sigma> v)) [''A0'', ''B0'', ''NA1'', ''NB0''])) (search NSPK)"
+definition "search_slow_NSPK = map_option (\<lambda>(cs, \<sigma>). (cs, map (\<lambda>v. (v, \<sigma> v)) [''A0'', ''B0'', ''NA1'', ''NB0''])) (search_slow NSPK)"
+value "search_NSPK"
+(* value "search_slow_NSPK" *)
+
+export_code search_KTP in Haskell module_name Search_KTP
+export_code search_KTP in SML module_name Search_KTP
+export_code search_slow_KTP in Haskell module_name Search_slow_KTP
+export_code search_slow_KTP in SML module_name Search_slow_KTP
+
+export_code search_NSPK in Haskell module_name Search_NSPK
+export_code search_NSPK in SML module_name Search_NSPK
+export_code search_slow_NSPK in Haskell module_name Search_slow_NSPK
+export_code search_slow_NSPK in SML module_name Search_slow_NSPK
 
 (* 10. (a) *)
 
