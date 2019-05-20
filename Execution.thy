@@ -1,5 +1,5 @@
 theory Execution imports
-  Main Deduction
+  Main HOL.String Deduction
 begin
 
 (* 9. (a) *)
@@ -316,37 +316,64 @@ declare search.simps[unfolded fold_option_map, folded search_slow_def, code]
 (* 9. (c) *)
 
 (* Key transport protocol *)
-definition KTP :: "constraint_system" where
-  "KTP = [[Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Pair (Var ''A0'') (Var ''B0''),
+definition ktp :: "constraint_system" where
+  "ktp = [[Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Pair (Var ''A0'') (Var ''B0''),
                [Public_key_encrypt (Pair (Cons ''k0'') (Signature (Cons ''k0'') (Var ''A0''))) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Public_key_encrypt (Pair (Var ''K1'') (Signature (Var ''K1'') (Cons ''a''))) (Cons ''b''),
                [Sym_encrypt (Cons ''m1'') (Var ''K1''), Public_key_encrypt (Pair (Cons ''k0'') (Signature (Cons ''k0'') (Var ''A0''))) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Sym_encrypt (Var ''Z0'') (Cons ''k0''),
                [Sym_encrypt (Cons ''m1'') (Var ''K1''), Public_key_encrypt (Pair (Cons ''k0'') (Signature (Cons ''k0'') (Var ''A0''))) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Pair (Var ''K1'') (Cons ''m1'')]"
-definition "search_KTP = map_option (\<lambda>(cs, \<sigma>). (cs, map (\<lambda>v. (v, \<sigma> v)) [''A0'', ''B0'', ''K1'', ''Z0''])) (search KTP)"
-definition "search_slow_KTP = map_option (\<lambda>(cs, \<sigma>). (cs, map (\<lambda>v. (v, \<sigma> v)) [''A0'', ''B0'', ''K1'', ''Z0''])) (search_slow KTP)"
-value "search_KTP"
-(* value "search_slow_KTP" *)
+definition ktp_vars :: "string list" where
+  "ktp_vars = [''A0'', ''B0'', ''K1'', ''Z0'']"
 
 (* Needham-Schroeder Public-Key protocol *)
-definition NSPK :: "constraint_system" where
-  "NSPK = [[Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Pair (Var ''A0'') (Var ''B0''),
+definition nspk :: "constraint_system" where
+  "nspk = [[Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Pair (Var ''A0'') (Var ''B0''),
                [Public_key_encrypt (Pair (Cons ''na0'') (Var ''A0'')) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Public_key_encrypt (Pair (Var ''NA1'') (Cons ''a'')) (Cons ''b''),
                [Public_key_encrypt (Pair (Var ''NA1'') (Cons ''nb1'')) (Cons ''a''), Public_key_encrypt (Pair (Cons ''na0'') (Var ''A0'')) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Public_key_encrypt (Pair (Cons ''na0'') (Var ''NB0'')) (Var ''A0''),
                [Public_key_encrypt (Var ''NB0'') (Var ''B0''), Public_key_encrypt (Pair (Var ''NA1'') (Cons ''nb1'')) (Cons ''a''), Public_key_encrypt (Pair (Cons ''na0'') (Var ''A0'')) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Public_key_encrypt (Cons ''nb1'') (Cons ''b''),
                [Public_key_encrypt (Var ''NB0'') (Var ''B0''), Public_key_encrypt (Pair (Var ''NA1'') (Cons ''nb1'')) (Cons ''a''), Public_key_encrypt (Pair (Cons ''na0'') (Var ''A0'')) (Var ''B0''), Cons ''a'', Cons ''b'', intruder] | [] \<triangleright> Pair (Var ''NA1'') (Cons ''nb1'')]"
-definition "search_NSPK = map_option (\<lambda>(cs, \<sigma>). (cs, map (\<lambda>v. (v, \<sigma> v)) [''A0'', ''B0'', ''NA1'', ''NB0''])) (search NSPK)"
-definition "search_slow_NSPK = map_option (\<lambda>(cs, \<sigma>). (cs, map (\<lambda>v. (v, \<sigma> v)) [''A0'', ''B0'', ''NA1'', ''NB0''])) (search_slow NSPK)"
-value "search_NSPK"
-(* value "search_slow_NSPK" *)
+definition nspk_vars :: "string list" where
+  "nspk_vars = [''A0'', ''B0'', ''NA1'', ''NB0'']"
 
-export_code search_KTP in Haskell module_name Search_KTP
-export_code search_KTP in SML module_name Search_KTP
-export_code search_slow_KTP in Haskell module_name Search_slow_KTP
-export_code search_slow_KTP in SML module_name Search_slow_KTP
+(* pretty-print functions for exporting the code *)
+definition print_list :: "('a \<Rightarrow> string) \<Rightarrow> 'a list \<Rightarrow> string" where
+  "print_list f M = ''['' @ foldl (\<lambda>out m. out @ (if out = [] then [] else '', '')  @ f m) [] M @ '']''"
 
-export_code search_NSPK in Haskell module_name Search_NSPK
-export_code search_NSPK in SML module_name Search_NSPK
-export_code search_slow_NSPK in Haskell module_name Search_slow_NSPK
-export_code search_slow_NSPK in SML module_name Search_slow_NSPK
+fun print_msg :: "msg \<Rightarrow> string" where
+  "print_msg (Cons s) = ''(Cons '' @ s @ '')''"
+| "print_msg (Var s) = ''(Var '' @ s @ '')''"
+| "print_msg (Hash m) = ''(Hash '' @ print_msg m @ '')''"
+| "print_msg (Pair u v) = ''(Pair '' @ print_msg u @ '' '' @ print_msg v @ '')''"
+| "print_msg (Sym_encrypt m k) = ''(Sym_encrypt '' @ print_msg m @ '' '' @ print_msg k @ '')''"
+| "print_msg (Public_key_encrypt m k) = ''(Public_key_encrypt '' @ print_msg m @ '' '' @ print_msg k @ '')''"
+| "print_msg (Signature m k) = ''(Signature '' @ print_msg m @ '' '' @ print_msg k @ '')''"
+
+fun print_c :: "constraint \<Rightarrow> string" where
+  "print_c (M | A \<triangleright> t) = ''('' @ print_list print_msg M @ '' | '' @ print_list print_msg A @ '' --> '' @ print_msg t @ '')''"
+
+fun print_search_result :: "(constraint list \<times> (char list \<times> msg) list) option \<Rightarrow> string" where
+  "print_search_result None = ''No solution.''"
+| "print_search_result (Some (cs, \<sigma>)) = ''Simple constraints: '' @ print_list print_c cs @ ''; Substitutions: '' @ print_list (\<lambda>(s, m). ''('' @ s @ '' --> '' @ print_msg m @ '')'') \<sigma>"
+
+definition print_search :: "string list \<Rightarrow> constraint_system \<Rightarrow> String.literal" where
+  "print_search ns cs = String.implode (print_search_result (map_option (\<lambda>(cs, \<sigma>). (cs, map (\<lambda>v. (v, \<sigma> v)) ns)) (search cs)))"
+
+definition print_search_slow :: "string list \<Rightarrow> constraint_system \<Rightarrow> String.literal" where
+  "print_search_slow ns cs = String.implode (print_search_result (map_option (\<lambda>(cs, \<sigma>). (cs, map (\<lambda>v. (v, \<sigma> v)) ns)) (search_slow cs)))"
+
+definition "print_search_KTP = print_search ktp_vars ktp"
+definition "print_search_slow_KTP = print_search_slow ktp_vars ktp"
+
+definition "print_search_NSPK = print_search nspk_vars nspk"
+definition "print_search_slow_NSPK = print_search_slow nspk_vars nspk"
+
+value "print_search_KTP"
+(* value "print_search_slow_KTP" *)
+
+value "print_search_NSPK"
+(* value "print_search_slow_NSPK" *)
+
+export_code print_search_KTP print_search_slow_KTP print_search_NSPK print_search_slow_NSPK in Haskell module_name Search file "/home/martin/camr/ghc"
+export_code print_search print_search_slow ktp_vars ktp nspk_vars nspk in SML module_name Search file "/home/martin/camr/sml/Search.sml"
 
 (* 10. (a) *)
 
