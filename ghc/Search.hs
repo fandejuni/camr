@@ -541,16 +541,6 @@ nspk =
                    Char False True False False False True True False,
                    Char True False False False True True False False]))];
 
-fold_option :: forall a b. (a -> Maybe b) -> [a] -> Maybe b;
-fold_option f [] = Nothing;
-fold_option f (a : asa) = (case f a of {
-                            Nothing -> fold_option f asa;
-                            Just aa -> Just aa;
-                          });
-
-post :: forall a. [Maybe a] -> Maybe a;
-post = fold_option id;
-
 of_bool :: forall a. (Zero_neq_one a) => Bool -> a;
 of_bool True = one;
 of_bool False = zero;
@@ -676,6 +666,13 @@ c_unify (Constraint m a (Signature v va)) =
 
 c_succ :: Constraint -> [([Constraint], [Char] -> Msg)];
 c_succ c = c_unify c ++ c_comp c ++ c_dec c;
+
+fold_option :: forall a b. (a -> Maybe b) -> [a] -> Maybe b;
+fold_option f [] = Nothing;
+fold_option f (a : asa) = (case f a of {
+                            Nothing -> fold_option f asa;
+                            Just aa -> Just aa;
+                          });
 
 c_simple :: Constraint -> Bool;
 c_simple (Constraint m a (Var uu)) = True;
@@ -859,12 +856,13 @@ nspk_vars =
 search_slow :: [Constraint] -> Maybe ([Constraint], [Char] -> Msg);
 search_slow ics =
   (if cs_simple ics then Just (ics, Var)
-    else post (map (\ (cs, sigma) ->
-                     (case search_slow cs of {
-                       Nothing -> Nothing;
-                       Just (csa, sigmaa) -> Just (csa, m_scomp sigmaa sigma);
-                     }))
-                (cs_succ ics)));
+    else fold_option id
+           (map (\ (cs, sigma) ->
+                  (case search_slow cs of {
+                    Nothing -> Nothing;
+                    Just (csa, sigmaa) -> Just (csa, m_scomp sigmaa sigma);
+                  }))
+             (cs_succ ics)));
 
 print_search_result :: Maybe ([Constraint], [([Char], Msg)]) -> [Char];
 print_search_result Nothing =

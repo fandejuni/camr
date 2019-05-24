@@ -4,27 +4,6 @@ begin
 
 (* 9. (a) *)
 
-(* map a list until an element is mapped to Some _ and return it *)
-fun "fold_option" :: "('a \<Rightarrow> 'b option) \<Rightarrow> 'a list \<Rightarrow> 'b option" where
-  "fold_option f [] = None"
-| "fold_option f (a # as) = (case f a of Some b \<Rightarrow> Some b | None \<Rightarrow> fold_option f as)"
-
-lemma "fold_option_exists":
-  assumes "fold_option f as = Some b"
-  shows "\<exists>a \<in> set as. f a = Some b"
-  using assms
-  apply (induction as)
-   apply simp_all
-  by (metis option.case_eq_if option.collapse)
-
-lemma "exists_fold_option":
-  assumes "\<exists>a \<in> set as. \<not>Option.is_none (f a)"
-  shows "\<not>Option.is_none (fold_option f as)"
-  using assms
-  apply (induction as)
-   apply simp_all
-  by (simp add: Option.is_none_def option.case_eq_if)
-
 lemma "maps_exists":
   assumes "b \<in> set (List.maps f as)"
   shows "\<exists>a \<in> set as. b \<in> set (f a)"
@@ -273,12 +252,33 @@ lemma "cs_rer_succ": "rer ics \<sigma> cs \<Longrightarrow> (cs, \<sigma>) \<in>
     by simp
   done
 
-(* 9. (b) *)
-
 (* needed for termination proof of search *)
 lemma "cs_succ_rer_any": "(cs, \<sigma>) \<in> set (cs_succ ics) \<Longrightarrow> rer_any cs ics"
   using cs_succ_rer rer_any.intros
   by blast
+
+(* 9. (b) *)
+
+(* map a list until an element is mapped to Some _ and return it *)
+fun "fold_option" :: "('a \<Rightarrow> 'b option) \<Rightarrow> 'a list \<Rightarrow> 'b option" where
+  "fold_option f [] = None"
+| "fold_option f (a # as) = (case f a of Some b \<Rightarrow> Some b | None \<Rightarrow> fold_option f as)"
+
+lemma "fold_option_exists":
+  assumes "fold_option f as = Some b"
+  shows "\<exists>a \<in> set as. f a = Some b"
+  using assms
+  apply (induction as)
+   apply simp_all
+  by (metis option.case_eq_if option.collapse)
+
+lemma "exists_fold_option":
+  assumes "\<exists>a \<in> set as. \<not>Option.is_none (f a)"
+  shows "\<not>Option.is_none (fold_option f as)"
+  using assms
+  apply (induction as)
+   apply simp_all
+  by (simp add: Option.is_none_def option.case_eq_if)
 
 lemma "fold_option_cong": "xs = ys \<Longrightarrow> (\<And>a. a \<in> set xs \<Longrightarrow> f a = f' a) \<Longrightarrow> fold_option f xs = fold_option f' ys"
 proof (induction xs arbitrary: ys)
@@ -293,7 +293,7 @@ context notes fold_option_cong[fundef_cong] begin
 (* main search function *)
 function search :: "constraint_system \<Rightarrow> (constraint_system \<times> m_subst) option" where
   "search ics = (if cs_simple ics then Some (ics, Var)
-                 else fold_option (\<lambda>(cs, \<sigma>). case search cs of Some (cs', \<sigma>') \<Rightarrow> Some (cs', m_scomp \<sigma>' \<sigma>) | None \<Rightarrow> None) (cs_succ ics))"
+                 else fold_option id (map (\<lambda>(cs, \<sigma>). case search cs of Some (cs', \<sigma>') \<Rightarrow> Some (cs', m_scomp \<sigma>' \<sigma>) | None \<Rightarrow> None) (cs_succ ics)))"
   by pat_completeness auto
 termination
   apply (relation "{(x, y). rer_any x y}")
@@ -301,17 +301,16 @@ termination
   using cs_succ_rer_any by auto
 end
 
-definition post where "post = fold_option id"
-
-lemma "fold_option_map": "fold_option f xs = post (map f xs)"
-  unfolding post_def
+lemma "fold_option_map": "fold_option id (map f xs) = fold_option f xs"
   apply (induction xs)
    apply simp
   by (metis fold_option.simps(2) id_apply list.simps(9))
 
+(* define fast search code equation for search *)
+lemmas search_code[code] = search.simps[unfolded fold_option_map]
 (* slow search function *)
 definition "search_slow = search"
-declare search.simps[unfolded fold_option_map, folded search_slow_def, code]
+lemmas search_slow_code[code] = search.simps[folded search_slow_def]
 
 (* 9. (c) *)
 
@@ -388,7 +387,7 @@ lemma "search_sound":
     proof (cases "cs_simple ics")
       case False
       then have "search ics = fold_option (\<lambda>(cs, \<sigma>). case search cs of Some (cs', \<sigma>') \<Rightarrow> Some (cs', m_scomp \<sigma>' \<sigma>) | None \<Rightarrow> None) (cs_succ ics)"
-        by simp
+        by (simp add: fold_option_map)
       then have "fold_option (\<lambda>(cs, \<sigma>). case search cs of Some (cs', \<sigma>') \<Rightarrow> Some (cs', m_scomp \<sigma>' \<sigma>) | None \<Rightarrow> None) (cs_succ ics) = Some (cs', \<sigma>'')"
         using prems(2)
         by simp
@@ -433,7 +432,7 @@ lemma "search_complete":
         by force
       then have "\<exists>z. z \<noteq> None \<and> search ics = z"
         using False exists_fold_option[of "(cs_succ ics)" "(\<lambda>(cs, \<sigma>). case search cs of Some (cs', \<sigma>') \<Rightarrow> Some (cs', m_scomp \<sigma>' \<sigma>) | None \<Rightarrow> None)"]
-        by (simp add: Option.is_none_def)
+        by (simp add: Option.is_none_def fold_option_map)
       then show ?thesis
         by blast
     qed simp

@@ -655,12 +655,6 @@ val nspk : constraint list =
                           Chara (true, false, false, false, true, true, false,
                                   false)]))];
 
-fun fold_option f [] = NONE
-  | fold_option f (a :: asa) =
-    (case f a of NONE => fold_option f asa | SOME aa => SOME aa);
-
-fun post x = fold_option id x;
-
 fun of_bool A_ true = one (one_zero_neq_one A_)
   | of_bool A_ false = zero (zero_zero_neq_one A_);
 
@@ -783,6 +777,10 @@ fun c_unify (Constraint (m, a, Var uu)) = []
       (m @ a);
 
 fun c_succ c = c_unify c @ c_comp c @ c_dec c;
+
+fun fold_option f [] = NONE
+  | fold_option f (a :: asa) =
+    (case f a of NONE => fold_option f asa | SOME aa => SOME aa);
 
 fun list_all p [] = true
   | list_all p (x :: xs) = p x andalso list_all p xs;
@@ -962,11 +960,11 @@ val nspk_vars : (char list) list =
 
 fun search_slow ics =
   (if cs_simple ics then SOME (ics, Var)
-    else post (map (fn (cs, sigma) =>
-                     (case search_slow cs of NONE => NONE
-                       | SOME (csa, sigmaa) =>
-                         SOME (csa, m_scomp sigmaa sigma)))
-                (cs_succ ics)));
+    else fold_option id
+           (map (fn (cs, sigma) =>
+                  (case search_slow cs of NONE => NONE
+                    | SOME (csa, sigmaa) => SOME (csa, m_scomp sigmaa sigma)))
+             (cs_succ ics)));
 
 fun print_search_result NONE =
   [Chara (false, true, true, true, false, false, true, false),
