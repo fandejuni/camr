@@ -371,8 +371,8 @@ value "print_search_KTP"
 value "print_search_NSPK"
 (* value "print_search_slow_NSPK" *)
 
-export_code print_search_KTP print_search_slow_KTP print_search_NSPK print_search_slow_NSPK in Haskell module_name Search file "/home/martin/camr/ghc"
-export_code print_search print_search_slow ktp_vars ktp nspk_vars nspk in SML module_name Search file "/home/martin/camr/sml/Search.sml"
+export_code print_search_KTP print_search_slow_KTP print_search_NSPK print_search_slow_NSPK in Haskell module_name Search file "./ghc"
+export_code print_search print_search_slow ktp_vars ktp nspk_vars nspk in SML module_name Search file "./sml/Search.sml"
 
 (* 10. (a) *)
 
