@@ -875,6 +875,12 @@ lemma size_term_fun:
   shows "size_term (sapply \<tau> xa) \<le> size_term (sapply \<tau> (Fun x1a x2))"
   using assms
 proof -
+
+(* Basically
+size_term (Fun x1a (map (sapply \<tau>) x2)) \<ge> sum_list (map size_term (map (sapply \<tau>) x2))
+    \<ge> size_term (sapply \<tau> xa)"
+*)
+
   have "sapply \<tau> (Fun x1a x2) = Fun x1a (map (sapply \<tau>) x2)" by simp
   also have "size_term (Fun x1a (map (sapply \<tau>) x2)) \<ge>
             fold (+) (map size_term (map (sapply \<tau>) x2)) 0"
@@ -889,15 +895,19 @@ proof -
 qed
 
 lemma size_term_subterm_prelim:
-  "x \<in> fv t \<Longrightarrow> size_term (sapply \<tau> (Var x)) \<le> size_term (sapply \<tau> t)"
+  "x \<in> fv t \<Longrightarrow> size_term (\<tau> \<cdot> (Var x)) \<le> size_term (\<tau> \<cdot> t)"
 proof (induction t)
   case (Var y)
   then show ?case
     by simp
 next
   case (Fun x1a x2)
+
+(* We go deeper *)
   obtain xa where "xa \<in> (set x2)" and "x \<in> fv xa"
     by (metis Fun.prems UN_E fv_fun)
+
+(* Induction hypothesis *)
   also have "size_term (sapply \<tau> (Var x)) \<le> size_term (sapply \<tau> xa)"
     using Fun.IH calculation by auto
   have "size_term (sapply \<tau> xa) \<le> size_term (sapply \<tau> (Fun x1a x2))"
@@ -907,7 +917,7 @@ next
 qed
 
 lemma size_term_subset:
-  "xa \<in> (set l) \<Longrightarrow> size_term (sapply \<tau> (Fun f l)) \<ge> 1 + size_term (sapply \<tau> xa)"
+  "xa \<in> (set l) \<Longrightarrow> size_term (\<tau> \<cdot> (Fun f l)) \<ge> 1 + size_term (\<tau> \<cdot> xa)"
 proof (induction l)
   case Nil
   then show ?case by auto
@@ -940,14 +950,23 @@ lemma size_term_subterm:
   and "\<not> (Var x = t)"
 shows "size_term (sapply \<tau> (Var x)) < size_term (sapply \<tau> t)"
 proof -
+
+(* t is necessarily a function *)
   obtain f and l where "t = Fun f l"
     by (metis (full_types) Unify.term.simps(17) assms(1) assms(2) fv.elims term.set_cases(2))
+
+(* we go deeper and find xa in t *)
   also obtain xa where "(xa \<in> (set l)) \<and> x \<in> fv xa"
     by (metis UN_E assms(1) calculation fv_fun)
+
+(* we get the inequality for xa using size_term_subterm_prelim *)
   have "size_term (sapply \<tau> (Var x)) \<le> size_term (sapply \<tau> xa)"
     by (meson \<open>xa \<in> set l \<and> x \<in> fv xa\<close> size_term_subterm_prelim)
+
+(* we transform this inequality into a strict one for t *)
   moreover have "size_term (sapply \<tau> t) > size_term (sapply \<tau> xa)"
     by (metis (no_types, lifting) \<open>xa \<in> set l \<and> x \<in> fv xa\<close> calculation(1) le_less_trans lessI linorder_neqE_nat order.asym plus_1_eq_Suc size_term_subset)
+
   then show ?thesis
     using calculation(2) le_less_trans by blast
 qed
@@ -957,13 +976,19 @@ lemma lemma2:
   shows "\<not>(unify U = None)"
   using assms
 proof (induction rule: unify.induct)
-case 1
+  case 1
+
+(* BASE case *)
+
   then show ?case by simp
 next
   case (2 x t U)
   then show ?case
   proof (cases "x \<in> fv t")
     case True
+   
+    (* OCCURS case *)
+    
     have "Var x = t"
     proof (rule ccontr)
       assume "\<not> (Var x = t)"
@@ -973,14 +998,17 @@ next
           using "2.prems" by blast
         also have "sapply \<tau> (Var x) = sapply \<tau> t"
           by (metis calculation list.discI list.sel(1) prod.sel(1) prod.sel(2) unifies.simps unifiess.simps)
-        have "size_term (sapply \<tau> (Var x)) = size_term (sapply \<tau> t)"
+        have "size_term (\<tau> \<cdot> (Var x)) = size_term (\<tau> \<cdot> t)"
           using \<open>\<tau> \<cdot> Var x = \<tau> \<cdot> t\<close> by auto
-        have "size_term (sapply \<tau> (Var x)) < size_term (sapply \<tau> t)"
+        have "size_term (\<tau> \<cdot> (Var x)) < size_term (\<tau> \<cdot> t)"
           by (meson True \<open>Var x \<noteq> t\<close> size_term_subterm)
         then show ?thesis
           using \<open>Unify.size_term (\<tau> \<cdot> Var x) = Unify.size_term (\<tau> \<cdot> t)\<close> nat_neq_iff by blast
       qed
     qed
+
+    (* SIMP case *)
+  
     then show ?thesis
       by (metis "2.IH"(2) "2.prems" fv.simps(1) insert_iff list.discI list.sel(3) unifiess.simps unify.simps(2))
   next
@@ -988,7 +1016,7 @@ next
     (* UNIFY case *)
     obtain \<tau> where "unifiess \<tau> ((Var x, t) # U)"
       using "2.prems" by blast
-    also have "sapply \<tau> (Var x) = sapply \<tau> t"
+    also have "\<tau> \<cdot> (Var x) = \<tau> \<cdot> t"
       by (metis calculation list.discI list.sel(1) prod.sel(1) prod.sel(2) unifies.simps unifiess.simps)
     have "sapply (\<tau> \<circ>s (Var(x := t))) = sapply \<tau>"
       by (meson False \<open>\<tau> \<cdot> Var x = \<tau> \<cdot> t\<close> unifies_fv_same)
@@ -998,11 +1026,14 @@ next
       using "2.IH"(1) False unifies_sapply_eq_sys by fastforce
   qed
 next
-case (3 v va y U)
+  case (3 v va y U)
+(* SWAP case *)
   then show ?case
   by (metis list.discI list.sel(1) list.sel(3) prod.sel(1) prod.sel(2) unifies.simps unifiess.simps unify.simps(3))
 next
   case (4 f u g v U)
+(* FAIL not possible *)
+(* FUN case *)
   obtain "f = g" and "length u = length v"
     by (metis (no_types, lifting) "4.prems" length_map list.discI list.sel(1) prod.sel(1) prod.sel(2) sapply.simps(1) term.inject(2) unifies.simps unifiess.simps)
   then show ?case
@@ -1013,6 +1044,13 @@ theorem completeness:
   assumes "\<exists>\<tau>. unifiess \<tau> U"
   shows "\<exists>\<sigma>. unify U = Some \<sigma> \<and> unifiess \<sigma> U"
   using assms lemma2 soundness1 by fastforce
+
+
+
+
+
+
+
 
 
 
